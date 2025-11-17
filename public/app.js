@@ -8,6 +8,8 @@ document.getElementById("runBtn").addEventListener("click", async () => {
     return;
   }
 
+ 
+
   document.getElementById("summary").textContent = "Running analysis...";
 
   try {
@@ -42,6 +44,26 @@ document.getElementById("runBtn").addEventListener("click", async () => {
   } catch (e) {
     document.getElementById("summary").textContent = "Exception: " + e;
   }
+});
+
+document.getElementById("subSearch").addEventListener("input", async e => {
+    const q = e.target.value.trim();
+    if (q.length < 2) return;
+
+    const res = await fetch("/api/searchsubs?q=" + encodeURIComponent(q));
+    const items = await res.json();
+
+    const ul = document.getElementById("subResults");
+    ul.innerHTML = "";
+    for (const it of items) {
+        const li = document.createElement("li");
+        li.textContent = it.path;
+        li.onclick = () => {
+        const inp = document.activeElement.id === "refPath" ? "refPath" : "tgtPath";
+        document.getElementById(inp).value = it.path;
+        };
+        ul.appendChild(li);
+    }
 });
 
 function drawDriftChart(drift) {

@@ -2,6 +2,9 @@ import express from "express";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
+import { exec } from "child_process";
+
+const SUB_PATTERNS = ["*.srt", "*.sub", "*.vtt"];
 
 const app = express();
 app.use(express.json());
@@ -69,6 +72,42 @@ app.post("/api/align", (req, res) => {
     } else {
       res.status(500).json({ error: "align.py failed", detail: errBuf || `exit ${code}` });
     }
+  });
+});
+
+
+
+app.get("/api/searchsubs", (req, res) => {
+  const q = (req.query.q || "").toLowerCase();
+  if (q.length < 2) return res.json([]);
+
+  const roots = [
+    "/mnt/media/Media/Movies",
+    "./subs"
+  ];
+
+  const findCmds = roots.map(
+    r => `find ${r} -type f \\( ${SUB_PATTERNS.map(p => `-iname '${p}'`).join(" -o ")} \\) -print`
+  );
+
+  exec(findCmds.join(" ; "), (err, stdout) => {
+    if (err) return res.json([]);
+
+    const all = stdout.split("\n").filter(Boolean);
+
+    const matches = [];
+    for (const p of all) {
+      const base = p.toLowerCase();
+      if (!base.includes(q)) continue;
+
+      matches.push({
+        path: p,
+        name: p.split("/").pop(),
+        dir: p.replace(/\/[^\/]+$/, "")
+      });
+    }
+
+    res.json(matches.slice(0, 80));
   });
 });
 

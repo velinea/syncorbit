@@ -140,24 +140,55 @@ def align_sequences(sim: np.ndarray, gap_penalty: float = 0.15) -> List[Tuple[in
     return pairs
 
 
-def extract_anchors(eng_cues: List[Cue], fin_cues: List[Cue],
-                    aligned: List[Tuple[int, int, float]],
-                    min_score: float = 0.55) -> List[dict]:
-    anchors = []
+def extract_anchors(eng_cues, fin_cues, aligned, min_score=0.60):
+    # (1) collect all raw matches
+    raw = []
     for i, j, score in aligned:
         if score < min_score:
             continue
-        ce = eng_cues[i]
-        cf = fin_cues[j]
-        offset = cf.start - ce.start
-        anchors.append({
+
+        ce, cf = eng_cues[i], fin_cues[j]
+
+        # (2) text length sanity: reject if massively different
+        ratio = max(len(ce.text), len(cf.text)) / (1 + min(len(ce.text), len(cf.text)))
+        if ratio > 4:     # 4x difference = likely wrong pairing
+            continue
+
+        raw.append({
             "eng_index": ce.index,
             "fin_index": cf.index,
-            "eng_start": round(ce.start, 3),
-            "fin_start": round(cf.start, 3),
-            "offset": round(offset, 3),
-            "score": round(score, 3),
+            "eng_start": ce.start,
+            "fin_start": cf.start,
+            "offset": cf.start - ce.start,
+            "score": score,
+            "len_ratio": ratio
         })
+
+    if not raw:
+        return []
+
+    # (3) Remove duplicate FIN matches (merged ENG cues)
+    # Keep only the highest-score match per fin_index
+    best = {}
+    for r in raw:
+        j = r["fin_index"]
+        if j not in best or r["score"] > best[j]["score"]:
+            best[j] = r
+    anchors = list(best.values())
+
+    # (4) Sort by ENG start time
+    anchors.sort(key=lambda x: x["eng_start"])
+
+    # (5) Remove local outliers using rolling median window
+    offsets = np.array([a["offset"] for a in anchors])
+    if len(offsets) >= 7:
+        med = np.convolve(offsets, np.ones(7)/7, mode="same")
+        cleaned = []
+        for a, m in zip(anchors, med):
+            if abs(a["offset"] - m) < 1.2:  # 1.2 sec tolerance
+                cleaned.append(a)
+        anchors = cleaned
+
     return anchors
 
 
