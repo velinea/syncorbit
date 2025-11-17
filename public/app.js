@@ -47,23 +47,43 @@ document.getElementById("runBtn").addEventListener("click", async () => {
 });
 
 document.getElementById("subSearch").addEventListener("input", async e => {
-    const q = e.target.value.trim();
-    if (q.length < 2) return;
+  const q = e.target.value.trim();
+  if (q.length < 2) return;
 
-    const res = await fetch("/api/searchsubs?q=" + encodeURIComponent(q));
-    const items = await res.json();
+  const res = await fetch("/api/searchsubs?q=" + encodeURIComponent(q));
+  const items = await res.json();
 
-    const ul = document.getElementById("subResults");
-    ul.innerHTML = "";
-    for (const it of items) {
-        const li = document.createElement("li");
-        li.textContent = it.path;
-        li.onclick = () => {
-        const inp = document.activeElement.id === "refPath" ? "refPath" : "tgtPath";
-        document.getElementById(inp).value = it.path;
-        };
-        ul.appendChild(li);
-    }
+  const ul = document.getElementById("subResults");
+  ul.innerHTML = "";
+
+  items.forEach(item => {
+    const li = document.createElement("li");
+
+    li.innerHTML = `
+      <strong>${item.base}</strong><br>
+      EN: ${item.en || "<i>missing</i>"}<br>
+      FI: ${item.fi || "<i>missing</i>"}
+    `;
+
+    li.style.cursor = "pointer";
+
+    li.addEventListener("click", () => {
+      // Preferred behavior:
+      // EN becomes reference, FI becomes target
+      if (item.en) document.getElementById("refPath").value = item.en;
+      if (item.fi) document.getElementById("tgtPath").value = item.fi;
+
+      // If English missing → assume the clicked file is reference
+      if (!item.en && item.fi) {
+        document.getElementById("refPath").value = item.fi;
+      }
+
+      // Optionally auto-scroll to analysis section
+      document.getElementById("refPath").focus();
+    });
+
+    ul.appendChild(li);
+  });
 });
 
 function drawDriftChart(drift) {

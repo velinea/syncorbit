@@ -86,28 +86,39 @@ app.get("/api/searchsubs", (req, res) => {
     "./subs"
   ];
 
-  const findCmds = roots.map(
-    r => `find ${r} -type f \\( ${SUB_PATTERNS.map(p => `-iname '${p}'`).join(" -o ")} \\) -print`
-  );
+  const patterns = ["*.srt", "*.sub", "*.vtt"];
 
-  exec(findCmds.join(" ; "), (err, stdout) => {
+  const cmd = roots
+    .map(r => `find ${r} -type f \\( ${patterns.map(p => `-iname '${p}'`).join(" -o ")} \\) -print`)
+    .join(" ; ");
+
+  exec(cmd, (err, stdout) => {
     if (err) return res.json([]);
 
     const all = stdout.split("\n").filter(Boolean);
 
-    const matches = [];
-    for (const p of all) {
-      const base = p.toLowerCase();
-      if (!base.includes(q)) continue;
+    // Filter by name match
+    const filtered = all.filter(p => p.toLowerCase().includes(q));
 
-      matches.push({
-        path: p,
-        name: p.split("/").pop(),
-        dir: p.replace(/\/[^\/]+$/, "")
-      });
+    // GROUP BY basename WITH language detection
+    const groups = {};
+
+    for (const p of filtered) {
+      const name = p.split("/").pop();
+
+      const base = name.replace(/(\.(en|eng|fi|fin))?\.(srt|vtt|sub)$/i, "");
+      const langMatch = name.match(/\.(eng|en|fin|fi)\.(srt|vtt|sub)$/i);
+      const lang = langMatch ? langMatch[1].toLowerCase() : "unknown";
+
+      if (!groups[base]) groups[base] = { base, en: null, fi: null, others: [] };
+
+      if (["en", "eng"].includes(lang)) groups[base].en = p;
+      else if (["fi", "fin"].includes(lang)) groups[base].fi = p;
+      else groups[base].others.push(p);
     }
 
-    res.json(matches.slice(0, 80));
+    // Convert to array, limit size
+    res.json(Object.values(groups).slice(0, 80));
   });
 });
 
