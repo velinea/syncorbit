@@ -42,6 +42,26 @@ from rapidfuzz import fuzz
 from sentence_transformers import SentenceTransformer, util as st_util
 
 
+# ---------------- CONFIG TUNABLES ---------------- #
+
+# Similarity threshold for raw matches
+MIN_SIM = 0.40      # was ~0.35; you can push up/down a bit
+
+# Max ratio between longer/shorter text lengths
+MAX_LEN_RATIO = 3.0  # you saw 3 → good results
+
+# Max ratio between longer/shorter cue durations
+MAX_DUR_RATIO = 3.0
+
+# Minimum characters for a line to be considered as an anchor candidate
+MIN_CHARS = 10
+
+# Residual threshold bounds for regression-based cleanup
+RESID_MIN = 0.8     # don't be tighter than this
+RESID_MAX = 1.8     # don't be looser than this
+RESID_MAD_FACTOR = 3.0  # scale median absolute deviation
+
+
 SRT_TIME_RE = re.compile(r"(\d+):(\d+):(\d+),(\d+)")
 
 
@@ -76,7 +96,6 @@ def load_srt(path: str) -> List[Cue]:
                     if len(times) == 2:
                         start = parse_time(times[0])
                         end = parse_time(times[1])
-                        # Join all text lines, strip tags like <i> etc.
                         text_lines = [re.sub(r"<.*?>", "", t).strip() for t in block[2:]]
                         text = " ".join(l for l in text_lines if l)
                         if text:
@@ -190,31 +209,55 @@ def align_sequences(sim: np.ndarray, gap_penalty: float = 0.15) -> List[Tuple[in
 
 # ---------- Anchor filtering & metrics ----------
 
-def filter_anchors(
+FILLER_SET = {
+    "yes", "yeah", "yep", "no", "ok", "okay", "oh", "ah",
+    "mm", "hmm", "hey", "hi", "bye",
+    # you can expand this with Finnish fillers too if needed
+}
+
+
+def build_raw_anchors(
     ref_cues: List[Cue],
     tgt_cues: List[Cue],
     aligned: List[Tuple[int, int, float]],
-    min_score: float = 0.60,
 ) -> List[dict]:
     """
-    From raw aligned pairs, produce a clean list of robust anchors:
-    - min similarity score
-    - reject huge text-length mismatches
-    - keep best match per target index
-    - rolling median filter on offsets
+    Turn aligned index pairs into raw anchor candidates
+    with basic content checks.
     """
     raw = []
 
-    # 1) basic filtering
     for i, j, score in aligned:
-        if score < min_score:
-            continue
-
         r = ref_cues[i]
         t = tgt_cues[j]
-        # length ratio filter: reject crazy mismatches (like 1 word vs 2 lines of speech)
-        len_r = max(len(r.text), len(t.text)) / (1 + min(len(r.text), len(t.text)))
-        if len_r > 4.0:
+
+        rt = r.text.strip()
+        tt = t.text.strip()
+
+        # too short -> skip
+        if len(rt) < MIN_CHARS or len(tt) < MIN_CHARS:
+            continue
+
+        # single word or filler
+        if rt.lower() in FILLER_SET or tt.lower() in FILLER_SET:
+            continue
+        if len(rt.split()) == 1 or len(tt.split()) == 1:
+            continue
+
+        # length ratio
+        len_ratio = max(len(rt), len(tt)) / max(1, min(len(rt), len(tt)))
+        if len_ratio > MAX_LEN_RATIO:
+            continue
+
+        # duration ratio
+        rdur = max(0.001, r.end - r.start)
+        tdur = max(0.001, t.end - t.start)
+        dur_ratio = max(rdur, tdur) / min(rdur, tdur)
+        if dur_ratio > MAX_DUR_RATIO:
+            continue
+
+        # similarity threshold
+        if score < MIN_SIM:
             continue
 
         raw.append({
@@ -224,40 +267,50 @@ def filter_anchors(
             "tgt_t": t.start,
             "delta": t.start - r.start,
             "score": score,
-            "len_ratio": len_r,
+            "len_ratio": len_ratio,
+            "dur_ratio": dur_ratio,
         })
 
-    if not raw:
-        return []
+    # keep in time order
+    raw.sort(key=lambda a: a["ref_t"])
+    return raw
 
-    # 2) keep best per target index (handles merged/split cues)
-    best_by_tgt = {}
-    for a in raw:
-        j = a["tgt_index"]
-        if j not in best_by_tgt or a["score"] > best_by_tgt[j]["score"]:
-            best_by_tgt[j] = a
 
-    anchors = list(best_by_tgt.values())
-    anchors.sort(key=lambda x: x["ref_t"])
+def clean_anchors_regression(anchors: List[dict]) -> List[dict]:
+    """
+    Robust regression-based cleanup:
+    - fit delta ~ a + b * ref_t
+    - drop outliers with large residuals
+    """
+    if len(anchors) < 10:
+        return anchors  # not enough data for regression
 
-    # 3) rolling median-based outlier removal
-    if len(anchors) >= 7:
-        deltas = np.array([a["delta"] for a in anchors], dtype=np.float32)
-        # simple centered window median using convolution on a copy
-        window = 7
-        pad = window // 2
-        padded = np.pad(deltas, pad_width=pad, mode="edge")
-        med = np.zeros_like(deltas)
-        for i in range(len(deltas)):
-            med[i] = np.median(padded[i:i + window])
+    t = np.array([a["ref_t"] for a in anchors], dtype=np.float32)
+    d = np.array([a["delta"] for a in anchors], dtype=np.float32)
 
-        cleaned = []
-        for a, m in zip(anchors, med):
-            if abs(a["delta"] - m) <= 1.2:  # 1.2s tolerance vs local median
-                cleaned.append(a)
-        anchors = cleaned
+    # center time to improve numeric stability
+    t0 = t.mean()
+    tc = t - t0
 
-    return anchors
+    # linear fit: d ~ k*tc + b
+    k, b = np.polyfit(tc, d, 1)
+    fit = k * tc + b
+    resid = d - fit
+
+    mad = np.median(np.abs(resid)) or 0.001
+    thresh = RESID_MAD_FACTOR * mad
+    thresh = max(RESID_MIN, min(RESID_MAX, thresh))
+
+    cleaned = []
+    for a, r in zip(anchors, resid):
+        if abs(r) <= thresh:
+            cleaned.append(a)
+
+    # if we threw away almost everything, fall back
+    if len(cleaned) < max(10, len(anchors) // 10):
+        return anchors
+
+    return cleaned
 
 
 def compute_metrics(anchors: List[dict]) -> dict:
@@ -365,9 +418,10 @@ def main():
 
     sim = build_similarity_matrix(ref_cues, tgt_cues, ref_vecs, tgt_vecs)
     aligned = align_sequences(sim)
-    anchors = filter_anchors(ref_cues, tgt_cues, aligned)
 
-    metrics = compute_metrics(anchors)
+    raw_anchors = build_raw_anchors(ref_cues, tgt_cues, aligned)
+    cleaned = clean_anchors_regression(raw_anchors)
+    metrics = compute_metrics(cleaned)
 
     decision = decide_quality(
         metrics["anchor_count"],
