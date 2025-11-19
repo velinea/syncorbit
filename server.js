@@ -137,20 +137,20 @@ app.get('/api/library', (req, res) => {
 
     const rows = raw.map((line) => {
       const parts = line.split(',')
-      const movie = parts[0]
-
-      // ROOT-safe path
-      const syncinfo = path.join(ROOT, movie, 'analysis.syncinfo')
-
       return {
-        movie,
+        movie: parts[0].trim(),
         anchor_count: Number(parts[1]),
         avg_offset: Number(parts[2]),
         drift_span: Number(parts[3]),
-        decision: parts[4] || 'unknown',
-        syncinfo_path: fs.existsSync(syncinfo) ? syncinfo : null,
+        decision: (parts[4] || 'unknown').trim().toLowerCase(),
+        syncinfo_path: fs.existsSync(
+          path.join(ROOT, parts[0], 'analysis.syncinfo')
+        )
+          ? path.join(ROOT, parts[0], 'analysis.syncinfo')
+          : null,
       }
     })
+
     res.json(rows)
   } catch (e) {
     res.status(500).json({ error: 'csv_read_failed', detail: String(e) })

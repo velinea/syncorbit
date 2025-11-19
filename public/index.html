@@ -4,60 +4,109 @@
     <meta charset="UTF-8" />
     <title>SyncOrbit</title>
     <link rel="stylesheet" href="style.css" />
-    <script defer type="module" src="app.js"></script>
+    <!-- app.js is now a module because it imports graph.js -->
+    <script type="module" src="app.js"></script>
   </head>
   <body>
     <header>
       <img src="logo.png" id="logo" />
       <h1>SyncOrbit — Subtitle Alignment</h1>
     </header>
-    <section class="card">
-      <h2>Library Results</h2>
-      <button id="loadLibraryBtn">Load summary</button>
 
-      <table id="libraryTable">
-        <thead>
-          <tr>
-            <th>Movie</th>
-            <th>Anchors</th>
-            <th>Avg Offset</th>
-            <th>Drift Span</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-
-      <div id="libNote" class="note"></div>
-    </section>
+    <!-- Top-level tabs -->
+    <nav id="tabs">
+      <button data-tab="library" class="active">Library</button>
+      <button data-tab="manual">Manual Align</button>
+    </nav>
 
     <main>
-      <section class="card">
-        <h2>Search Subtitles</h2>
-        <input id="searchBox" type="text" placeholder="Search movie…" />
-        <div id="results"></div>
-      </section>
+      <!-- LIBRARY TAB -->
+      <div id="tab-library" class="tab active">
+        <section class="card">
+          <h2>Library Results</h2>
 
-      <section class="card">
-        <h2>Selected Pair</h2>
-        <div class="paths">
-          <div>
-            <label>Reference (EN)</label>
-            <input id="refPath" type="text" readonly />
-          </div>
-          <div>
-            <label>Target (FI)</label>
-            <input id="targetPath" type="text" readonly />
-          </div>
-        </div>
-        <button id="alignBtn" disabled>Align</button>
-      </section>
+          <div class="library-controls">
+            <button id="loadLibraryBtn">Reload summary</button>
 
-      <section class="card">
-        <h2>Result</h2>
-        <pre id="summary">(no data)</pre>
-        <canvas id="graphCanvas"></canvas>
-      </section>
+            <input id="librarySearch" type="text" placeholder="Search movie…" />
+
+            <select id="libraryStatus">
+              <option value="">All statuses</option>
+              <option value="synced">Synced</option>
+              <option value="needs_adjustment">Needs adjustment</option>
+              <option value="bad">Bad</option>
+            </select>
+
+            <label class="library-limit-label">
+              Show
+              <select id="libraryLimit">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+                <option value="999999">All</option>
+              </select>
+              rows
+            </label>
+          </div>
+
+          <div id="libraryArea">
+            <div class="library-left">
+              <table id="libraryTable">
+                <thead>
+                  <tr>
+                    <th data-sort="movie">Movie</th>
+                    <th data-sort="anchor_count">Anchors</th>
+                    <th data-sort="avg_offset">Avg Offset</th>
+                    <th data-sort="drift_span">Drift Span</th>
+                    <th data-sort="decision">Status</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+
+              <div id="libNote" class="note"></div>
+            </div>
+
+            <div class="library-right">
+              <h3>Selected Analysis</h3>
+              <pre id="librarySummary">
+(select a movie row to view its analysis.syncinfo)</pre
+              >
+              <canvas id="libraryGraph"></canvas>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- MANUAL ALIGN TAB -->
+      <div id="tab-manual" class="tab">
+        <section class="card">
+          <h2>Search Subtitles</h2>
+          <input id="searchBox" type="text" placeholder="Search movie…" />
+          <div id="results"></div>
+        </section>
+
+        <section class="card">
+          <h2>Selected Pair</h2>
+          <div class="paths">
+            <div>
+              <label>Reference (EN)</label>
+              <input id="refPath" type="text" readonly />
+            </div>
+            <div>
+              <label>Target (FI)</label>
+              <input id="targetPath" type="text" readonly />
+            </div>
+          </div>
+          <button id="alignBtn" disabled>Align</button>
+        </section>
+
+        <section class="card">
+          <h2>Result</h2>
+          <pre id="summary">(no data)</pre>
+          <canvas id="graphCanvas"></canvas>
+        </section>
+      </div>
     </main>
   </body>
 </html>

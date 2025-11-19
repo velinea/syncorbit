@@ -1,26 +1,116 @@
 import { drawGraph } from './graph.js'
 
+// -------- DOM ELEMENTS --------
+
+// Manual align elements
 const searchBox = document.getElementById('searchBox')
 const resultsDiv = document.getElementById('results')
 const refPathInput = document.getElementById('refPath')
 const targetPathInput = document.getElementById('targetPath')
 const alignBtn = document.getElementById('alignBtn')
 const summaryPre = document.getElementById('summary')
-const canvas = document.getElementById('graphCanvas')
+const manualCanvas = document.getElementById('graphCanvas')
 
+// Library elements
+const loadLibraryBtn = document.getElementById('loadLibraryBtn')
+const libraryTableBody = document
+  .getElementById('libraryTable')
+  .querySelector('tbody')
+const libNote = document.getElementById('libNote')
+const librarySearchInput = document.getElementById('librarySearch')
+const libraryStatusSelect = document.getElementById('libraryStatus')
+const libraryLimitSelect = document.getElementById('libraryLimit')
+const librarySummaryPre = document.getElementById('librarySummary')
+const libraryCanvas = document.getElementById('libraryGraph')
+
+// Tabs
+const tabButtons = document.querySelectorAll('#tabs button')
+const tabViews = document.querySelectorAll('.tab')
+
+// State
 let searchTimer = null
+let libraryRows = []
+let librarySortKey = 'movie'
+let librarySortDir = 'asc'
 
-// ------------- SEARCH -------------
+// -------- TAB SWITCHING --------
 
-searchBox.addEventListener('input', () => {
-  clearTimeout(searchTimer)
-  const q = searchBox.value.trim()
-  if (q.length < 2) {
-    resultsDiv.innerHTML = ''
-    return
-  }
-  searchTimer = setTimeout(() => runSearch(q), 250)
+tabButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    // buttons
+    tabButtons.forEach((b) => b.classList.remove('active'))
+    btn.classList.add('active')
+
+    // views
+    const target = btn.dataset.tab
+    tabViews.forEach((v) => v.classList.remove('active'))
+    document.getElementById(`tab-${target}`).classList.add('active')
+
+    // Lazy-load library on first show
+    if (target === 'library' && libraryRows.length === 0) {
+      loadLibrary()
+    }
+  })
 })
+
+// -------- GENERIC HELPERS --------
+
+function clearCanvas(c) {
+  if (!c) return
+  const ctx = c.getContext('2d')
+  const W = (c.width = c.clientWidth || 600)
+  const H = (c.height = c.clientHeight || 220)
+  ctx.fillStyle = '#020617'
+  ctx.fillRect(0, 0, W, H)
+}
+
+// Manual & library clears
+function clearManualGraph() {
+  clearCanvas(manualCanvas)
+}
+
+function clearLibraryGraph() {
+  clearCanvas(libraryCanvas)
+}
+
+function safe(v, digits = 3) {
+  return typeof v === 'number' && !isNaN(v) ? v.toFixed(digits) : '–'
+}
+
+// Render summary into a target <pre>
+function renderSummary(d, targetEl = summaryPre) {
+  const anchors = d.anchor_count ?? 0
+  const avg = Number(d.avg_offset_sec ?? d.avg_offset ?? 0)
+  const span = Number(d.drift_span_sec ?? d.drift_span ?? 0)
+  const min = Number(d.min_offset_sec ?? 0)
+  const max = Number(d.max_offset_sec ?? 0)
+  const decision = d.decision ?? 'unknown'
+
+  targetEl.textContent =
+    `Ref:        ${d.ref_path || d.reference || ''}\n` +
+    `Target:     ${d.target_path || d.target || ''}\n\n` +
+    `Ref lines:  ${d.ref_count ?? '-'}\n` +
+    `Tgt lines:  ${d.target_count ?? '-'}\n` +
+    `Anchors:    ${anchors}\n` +
+    `Avg offset: ${avg.toFixed(3)} s\n` +
+    `Drift span: ${span.toFixed(3)} s\n` +
+    `Min / Max:  ${min.toFixed(3)} s  /  ${max.toFixed(3)} s\n` +
+    `Decision:   ${decision}`
+}
+
+// -------- MANUAL SEARCH --------
+
+if (searchBox) {
+  searchBox.addEventListener('input', () => {
+    clearTimeout(searchTimer)
+    const q = searchBox.value.trim()
+    if (q.length < 2) {
+      resultsDiv.innerHTML = ''
+      return
+    }
+    searchTimer = setTimeout(() => runSearch(q), 250)
+  })
+}
 
 async function runSearch(q) {
   resultsDiv.innerHTML = 'Searching…'
@@ -47,7 +137,7 @@ async function runSearch(q) {
         summaryPre.textContent = `Selected: ${g.base}\nEN: ${
           g.en || '-'
         }\nFI: ${g.fi || '-'}`
-        clearGraph()
+        clearManualGraph()
       }
 
       resultsDiv.appendChild(div)
@@ -58,158 +148,211 @@ async function runSearch(q) {
   }
 }
 
-// ------------- ALIGN -------------
+// -------- MANUAL ALIGN --------
 
-alignBtn.addEventListener('click', async () => {
-  const reference = refPathInput.value.trim()
-  const target = targetPathInput.value.trim()
-  if (!reference || !target) {
-    summaryPre.textContent = 'Reference and target required.'
-    return
-  }
-
-  summaryPre.textContent = 'Running align.py…'
-
-  try {
-    const res = await fetch('/api/align', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reference, target }),
-    })
-
-    const data = await res.json()
-    if (data.error) {
-      summaryPre.textContent = `Error: ${data.error}\n${data.detail || ''}`
-      clearGraph()
+if (alignBtn) {
+  alignBtn.addEventListener('click', async () => {
+    const reference = refPathInput.value.trim()
+    const target = targetPathInput.value.trim()
+    if (!reference || !target) {
+      summaryPre.textContent = 'Reference and target required.'
       return
     }
 
-    renderSummary(data)
-    drawGraph(data.offsets || [])
-  } catch (e) {
-    console.error('align error', e)
-    summaryPre.textContent = 'Align failed: ' + e.message
-    clearGraph()
-  }
-})
+    summaryPre.textContent = 'Running align.py…'
 
-// ------------- SUMMARY -------------
+    try {
+      const res = await fetch('/api/align', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference, target }),
+      })
 
-function renderSummary(d) {
-  const anchors = d.anchor_count ?? 0
-  const avg = Number(d.avg_offset_sec ?? 0)
-  const span = Number(d.drift_span_sec ?? 0)
-  const min = Number(d.min_offset_sec ?? 0)
-  const max = Number(d.max_offset_sec ?? 0)
-  const decision = d.decision ?? 'unknown'
+      const data = await res.json()
+      if (data.error) {
+        summaryPre.textContent = `Error: ${data.error}\n${data.detail || ''}`
+        clearManualGraph()
+        return
+      }
 
-  summaryPre.textContent =
-    `Ref:        ${d.ref_path}\n` +
-    `Target:     ${d.target_path}\n\n` +
-    `Ref lines:  ${d.ref_count}\n` +
-    `Tgt lines:  ${d.target_count}\n` +
-    `Anchors:    ${anchors}\n` +
-    `Avg offset: ${avg.toFixed(3)} s\n` +
-    `Drift span: ${span.toFixed(3)} s\n` +
-    `Min / Max:  ${min.toFixed(3)} s  /  ${max.toFixed(3)} s\n` +
-    `Decision:   ${decision}`
+      renderSummary(data, summaryPre)
+      drawGraph(manualCanvas, data.offsets || [])
+    } catch (e) {
+      console.error('align error', e)
+      summaryPre.textContent = 'Align failed: ' + e.message
+      clearManualGraph()
+    }
+  })
 }
 
-// ------------- GRAPH -------------
+// -------- LIBRARY VIEW --------
 
-function clearGraph() {
-  const ctx = canvas.getContext('2d')
-  const W = (canvas.width = canvas.clientWidth || 600)
-  const H = (canvas.height = canvas.clientHeight || 220)
-  ctx.fillStyle = '#020617'
-  ctx.fillRect(0, 0, W, H)
+if (loadLibraryBtn) {
+  loadLibraryBtn.addEventListener('click', loadLibrary)
 }
-
-// Initial clear
-clearGraph()
-
-function safe(v, digits = 3) {
-  return typeof v === 'number' && !isNaN(v) ? v.toFixed(digits) : '–'
-}
-
-// ---------------- LIBRARY RESULTS ----------------
-
-const loadLibraryBtn = document.getElementById('loadLibraryBtn')
-const libraryTable = document
-  .getElementById('libraryTable')
-  .querySelector('tbody')
-const libNote = document.getElementById('libNote')
-
-loadLibraryBtn.addEventListener('click', loadLibrary)
 
 async function loadLibrary() {
-  libraryTable.innerHTML = "<tr><td colspan='5'>Loading…</td></tr>"
+  libraryTableBody.innerHTML = "<tr><td colspan='5'>Loading…</td></tr>"
 
   try {
     const res = await fetch('/api/library')
-    const rows = await res.json()
+    const data = await res.json()
 
-    if (rows.error === 'no_summary_file') {
-      libraryTable.innerHTML =
+    if (data.error === 'no_summary_file') {
+      libraryRows = []
+      libraryTableBody.innerHTML =
         "<tr><td colspan='5'>No summary file found.</td></tr>"
+      libNote.textContent = ''
       return
     }
-    libraryTable.innerHTML = ''
 
-    rows.forEach((r) => {
-      const tr = document.createElement('tr')
+    if (!Array.isArray(data)) {
+      libraryRows = []
+      libraryTableBody.innerHTML =
+        "<tr><td colspan='5'>Unexpected response.</td></tr>"
+      return
+    }
 
-      const statusClass =
-        r.decision === 'synced'
-          ? 'status-synced'
-          : r.decision === 'needs_adjustment'
-          ? 'status-adjust'
-          : 'status-bad'
-
-      tr.innerHTML = `
-        <td>${r.movie}</td>
-        <td>${safe(r.anchor_count)}</td>
-        <td>${safe(r.avg_offset)}</td>
-        <td>${safe(r.drift_span)}</td>
-        <td class="${statusClass}">${r.decision}</td>
-      `
-
-      // Click to load detailed analysis
-      tr.addEventListener('click', async () => {
-        if (!r.syncinfo_path) {
-          summaryPre.textContent = 'No analysis.syncinfo found for this movie.'
-          clearGraph()
-          return
-        }
-
-        summaryPre.textContent = 'Loading existing analysis…'
-
-        try {
-          const res = await fetch(
-            `/api/movieinfo?file=${encodeURIComponent(r.syncinfo_path)}`
-          )
-          const data = await res.json()
-
-          if (data.error) {
-            summaryPre.textContent = 'Error: ' + data.error
-            clearGraph()
-            return
-          }
-
-          renderSummary(data)
-          drawGraph(canvas, data.offsets || [])
-        } catch (e) {
-          summaryPre.textContent = 'Failed to load analysis: ' + e.message
-          clearGraph()
-        }
-      })
-      libraryTable.appendChild(tr)
-    })
-
-    libNote.textContent = 'Click any movie to analyze subtitle pairs in detail.'
+    libraryRows = data
+    renderLibraryTable()
+    libNote.textContent =
+      'Tip: use search / filters, then click any movie row to see its analysis.'
   } catch (e) {
-    libraryTable.innerHTML =
-      "<tr><td colspan='5'>Error loading summary.</td></tr>"
     console.error('library error', e)
+    libraryRows = []
+    libraryTableBody.innerHTML =
+      "<tr><td colspan='5'>Error loading summary.</td></tr>"
   }
 }
+
+// Filters
+if (librarySearchInput) {
+  librarySearchInput.addEventListener('input', renderLibraryTable)
+}
+if (libraryStatusSelect) {
+  libraryStatusSelect.addEventListener('change', renderLibraryTable)
+}
+if (libraryLimitSelect) {
+  libraryLimitSelect.addEventListener('change', renderLibraryTable)
+}
+
+// Sorting via header click
+document.querySelectorAll('#libraryTable thead th[data-sort]').forEach((th) => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort
+    if (librarySortKey === key) {
+      librarySortDir = librarySortDir === 'asc' ? 'desc' : 'asc'
+    } else {
+      librarySortKey = key
+      librarySortDir = 'asc'
+    }
+    renderLibraryTable()
+  })
+})
+
+function renderLibraryTable() {
+  if (!libraryTableBody) return
+
+  if (!libraryRows.length) {
+    libraryTableBody.innerHTML =
+      "<tr><td colspan='5'>No rows loaded. Click “Reload summary”.</td></tr>"
+    return
+  }
+
+  const searchTerm = librarySearchInput.value.trim().toLowerCase()
+  const statusFilter = libraryStatusSelect.value
+  const limit = parseInt(libraryLimitSelect.value, 10) || 100
+
+  let rows = libraryRows.filter((r) => {
+    if (searchTerm && !r.movie.toLowerCase().includes(searchTerm)) return false
+    if (statusFilter && r.decision !== statusFilter) return false
+    return true
+  })
+
+  rows.sort((a, b) => {
+    let av = a[librarySortKey]
+    let bv = b[librarySortKey]
+
+    if (typeof av === 'string') av = av.toLowerCase()
+    if (typeof bv === 'string') bv = bv.toLowerCase()
+
+    if (av < bv) return librarySortDir === 'asc' ? -1 : 1
+    if (av > bv) return librarySortDir === 'asc' ? 1 : -1
+    return 0
+  })
+
+  const limited = rows.slice(0, limit)
+
+  if (!limited.length) {
+    libraryTableBody.innerHTML =
+      "<tr><td colspan='5'>No matches for current filters.</td></tr>"
+    return
+  }
+
+  libraryTableBody.innerHTML = ''
+
+  limited.forEach((r) => {
+    const tr = document.createElement('tr')
+
+    const statusClass =
+      r.decision === 'synced'
+        ? 'status-synced'
+        : r.decision === 'needs_adjustment'
+        ? 'status-adjust'
+        : 'status-bad'
+
+    tr.innerHTML = `
+      <td>${r.movie}</td>
+      <td>${safe(r.anchor_count)}</td>
+      <td>${safe(r.avg_offset)}</td>
+      <td>${safe(r.drift_span)}</td>
+      <td class="${statusClass}">${r.decision}</td>
+    `
+
+    tr.addEventListener('click', () => {
+      openLibraryAnalysis(r)
+    })
+
+    libraryTableBody.appendChild(tr)
+  })
+}
+
+async function openLibraryAnalysis(row) {
+  if (!row.syncinfo_path) {
+    librarySummaryPre.textContent =
+      'No analysis.syncinfo found for this movie folder.'
+    clearLibraryGraph()
+    return
+  }
+
+  librarySummaryPre.textContent = 'Loading analysis…'
+
+  try {
+    const res = await fetch(
+      `/api/movieinfo?file=${encodeURIComponent(row.syncinfo_path)}`
+    )
+    const data = await res.json()
+
+    if (data.error) {
+      librarySummaryPre.textContent = 'Error: ' + data.error
+      clearLibraryGraph()
+      return
+    }
+
+    renderSummary(data, librarySummaryPre)
+    drawGraph(libraryCanvas, data.offsets || [])
+  } catch (e) {
+    console.error('movieinfo error', e)
+    librarySummaryPre.textContent = 'Failed to load analysis: ' + e.message
+    clearLibraryGraph()
+  }
+}
+
+// -------- INITIAL SETUP --------
+
+// Clear both graphs initially
+clearManualGraph()
+clearLibraryGraph()
+
+// Optionally load library immediately on first load (library tab is default)
+loadLibrary()
