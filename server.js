@@ -90,57 +90,33 @@ app.post('/api/align', (req, res) => {
 })
 
 app.get('/api/searchsubs', (req, res) => {
-  const q = (req.query.q || '').trim().toLowerCase()
+  const q = (req.query.q || '').toLowerCase()
   if (q.length < 2) return res.json([])
 
-  const roots = ['/mnt/media/Media/Movies', './subs']
+  const root = './subs' // ONLY your subs dir
+  const cmd = `find ${root} -type f -iname '*.srt' -print`
 
-  // Only look for .srt – much faster, and that’s what you actually use
-  const cmd = roots.map((r) => `find '${r}' -type f -iname '*.srt'`).join(' ; ')
+  exec(cmd, (err, stdout) => {
+    if (err) return res.json([])
 
-  exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
-    if (err) {
-      console.error('searchsubs find error:', err)
-      return res.json([])
-    }
-
-    const all = stdout
-      .split('\n')
-      .filter(Boolean)
-      .filter((p) => p.toLowerCase().includes(q))
-
-    // De-duplicate paths
-    const files = [...new Set(all)]
+    const all = stdout.split('\n').filter(Boolean)
+    const filtered = all.filter((p) => p.toLowerCase().includes(q))
 
     const groups = {}
+    for (const p of filtered) {
+      const name = path.basename(p)
+      const base = name.replace(/\.(en|eng|fi|fin)?\.srt$/i, '')
+      const langMatch = name.match(/\.(en|eng|fi|fin)\.srt$/i)
+      const lang = langMatch ? langMatch[1].toLowerCase() : 'unknown'
 
-    for (const p of files) {
-      const name = p.split('/').pop() // filename
+      if (!groups[base]) groups[base] = { base, en: null, fi: null, others: [] }
 
-      // Strip language suffix and extension -> base movie name
-      const base = name
-        .replace(/\.(en|eng|fi|fin)\.srt$/i, '')
-        .replace(/\.srt$/i, '')
-
-      // Detect language
-      let lang = 'unknown'
-      if (/\.(en|eng)\.srt$/i.test(name)) lang = 'en'
-      else if (/\.(fi|fin)\.srt$/i.test(name)) lang = 'fi'
-
-      if (!groups[base]) {
-        groups[base] = { base, en: null, fi: null, others: [] }
-      }
-
-      if (lang === 'en') groups[base].en = p
-      else if (lang === 'fi') groups[base].fi = p
+      if (lang.startsWith('en')) groups[base].en = p
+      else if (lang.startsWith('fi')) groups[base].fi = p
       else groups[base].others.push(p)
     }
 
-    const result = Object.values(groups)
-      .sort((a, b) => a.base.localeCompare(b.base))
-      .slice(0, 80)
-
-    res.json(result)
+    res.json(Object.values(groups).slice(0, 80))
   })
 })
 
@@ -172,6 +148,20 @@ app.get('/api/library', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'csv_read_failed', detail: String(e) })
   }
+})
+
+app.get('/api/movieinfo', (req, res) => {
+  const file = req.query.file // absolute path to the .syncinfo file
+  if (!file) return res.status(400).json({ error: 'missing file param' })
+
+  fs.readFile(file, 'utf8', (err, data) => {
+    if (err) return res.status(500).json({ error: 'cannot read file' })
+    try {
+      res.json(JSON.parse(data))
+    } catch (e) {
+      res.status(500).json({ error: 'bad JSON', raw: data })
+    }
+  })
 })
 
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'))
