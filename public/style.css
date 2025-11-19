@@ -1,6 +1,7 @@
 body {
-  margin: 0;
+  margin: 0.5em auto;
   font-family: system-ui, sans-serif;
+  max-width: 1000px;
   background: #0b1522;
   color: #f4f4f4;
 }
@@ -23,6 +24,7 @@ main {
 }
 
 .card {
+  position: relative;
   background: #111827;
   padding: 16px;
   margin-bottom: 20px;
@@ -159,4 +161,8 @@ button:disabled {
 .note {
   margin-top: 10px;
   color: #93c5fd;
+}
+.graph-tooltip {
+  backdrop-filter: blur(4px);
+  border: 1px solid #334155;
 }

@@ -5,6 +5,8 @@ import fs from 'fs'
 import { exec } from 'child_process'
 
 const app = express()
+const ROOT = path.join(process.cwd(), 'subs')
+
 app.use(express.json())
 app.use(express.static('public'))
 
@@ -93,8 +95,7 @@ app.get('/api/searchsubs', (req, res) => {
   const q = (req.query.q || '').toLowerCase()
   if (q.length < 2) return res.json([])
 
-  const root = './subs' // ONLY your subs dir
-  const cmd = `find ${root} -type f -iname '*.srt' -print`
+  const cmd = `find ${ROOT} -type f -iname '*.srt' -print`
 
   exec(cmd, (err, stdout) => {
     if (err) return res.json([])
@@ -136,12 +137,18 @@ app.get('/api/library', (req, res) => {
 
     const rows = raw.map((line) => {
       const parts = line.split(',')
+      const movie = parts[0]
+
+      // ROOT-safe path
+      const syncinfo = path.join(ROOT, movie, 'analysis.syncinfo')
+
       return {
-        movie: parts[0],
+        movie,
         anchor_count: Number(parts[1]),
         avg_offset: Number(parts[2]),
         drift_span: Number(parts[3]),
         decision: parts[4] || 'unknown',
+        syncinfo_path: fs.existsSync(syncinfo) ? syncinfo : null,
       }
     })
     res.json(rows)

@@ -1,3 +1,5 @@
+import { drawGraph } from './graph.js'
+
 const searchBox = document.getElementById('searchBox')
 const resultsDiv = document.getElementById('results')
 const refPathInput = document.getElementById('refPath')
@@ -123,44 +125,6 @@ function clearGraph() {
   ctx.fillRect(0, 0, W, H)
 }
 
-function drawGraph(offsets) {
-  const ctx = canvas.getContext('2d')
-  const W = (canvas.width = canvas.clientWidth || 600)
-  const H = (canvas.height = canvas.clientHeight || 220)
-
-  ctx.fillStyle = '#020617'
-  ctx.fillRect(0, 0, W, H)
-
-  if (!offsets.length) return
-
-  // Extract arrays
-  const xs = offsets.map((o) => o.ref_t ?? o.t_ref ?? 0)
-  const ys = offsets.map((o) => o.delta ?? 0)
-
-  const minX = Math.min(...xs)
-  const maxX = Math.max(...xs)
-  const minY = Math.min(...ys)
-  const maxY = Math.max(...ys)
-
-  const spanX = maxX - minX || 1
-  const spanY = maxY - minY || 1
-
-  ctx.strokeStyle = '#22c55e'
-  ctx.lineWidth = 1.2
-  ctx.beginPath()
-
-  offsets.forEach((o, i) => {
-    const x = (((o.ref_t ?? o.t_ref ?? 0) - minX) / spanX) * W
-    const yVal = o.delta ?? 0
-    const y = H - ((yVal - minY) / spanY) * H
-
-    if (i === 0) ctx.moveTo(x, y)
-    else ctx.lineTo(x, y)
-  })
-
-  ctx.stroke()
-}
-
 // Initial clear
 clearGraph()
 
@@ -210,14 +174,35 @@ async function loadLibrary() {
         <td class="${statusClass}">${r.decision}</td>
       `
 
-      // Click row → open in Align view
-      tr.addEventListener('click', () => {
-        searchBox.value = r.movie
-        runSearch(r.movie)
-        summaryPre.textContent = `Selected from library: ${r.movie}`
-        clearGraph()
-      })
+      // Click to load detailed analysis
+      tr.addEventListener('click', async () => {
+        if (!r.syncinfo_path) {
+          summaryPre.textContent = 'No analysis.syncinfo found for this movie.'
+          clearGraph()
+          return
+        }
 
+        summaryPre.textContent = 'Loading existing analysis…'
+
+        try {
+          const res = await fetch(
+            `/api/movieinfo?file=${encodeURIComponent(r.syncinfo_path)}`
+          )
+          const data = await res.json()
+
+          if (data.error) {
+            summaryPre.textContent = 'Error: ' + data.error
+            clearGraph()
+            return
+          }
+
+          renderSummary(data)
+          drawGraph(canvas, data.offsets || [])
+        } catch (e) {
+          summaryPre.textContent = 'Failed to load analysis: ' + e.message
+          clearGraph()
+        }
+      })
       libraryTable.appendChild(tr)
     })
 
