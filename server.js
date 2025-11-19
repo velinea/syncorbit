@@ -144,4 +144,34 @@ app.get('/api/searchsubs', (req, res) => {
   })
 })
 
+app.get('/api/library', (req, res) => {
+  const CSV = path.join(
+    process.cwd(),
+    'python',
+    'syncorbit_library_summary.csv'
+  )
+
+  if (!fs.existsSync(CSV)) {
+    return res.json({ error: 'no_summary_file' })
+  }
+
+  try {
+    const raw = fs.readFileSync(CSV, 'utf8').trim().split('\n').filter(Boolean)
+
+    const rows = raw.map((line) => {
+      const parts = line.split(',')
+      return {
+        movie: parts[0],
+        anchor_count: Number(parts[1]),
+        avg_offset: Number(parts[2]),
+        drift_span: Number(parts[3]),
+        decision: parts[4] || 'unknown',
+      }
+    })
+    res.json(rows)
+  } catch (e) {
+    res.status(500).json({ error: 'csv_read_failed', detail: String(e) })
+  }
+})
+
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'))

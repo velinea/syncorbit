@@ -8,8 +8,28 @@
   </head>
   <body>
     <header>
+      <img src="logo.png" id="logo" />
       <h1>SyncOrbit — Subtitle Alignment</h1>
     </header>
+    <section class="card">
+      <h2>Library Results</h2>
+      <button id="loadLibraryBtn">Load summary</button>
+
+      <table id="libraryTable">
+        <thead>
+          <tr>
+            <th>Movie</th>
+            <th>Anchors</th>
+            <th>Avg Offset</th>
+            <th>Drift Span</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div id="libNote" class="note"></div>
+    </section>
 
     <main>
       <section class="card">

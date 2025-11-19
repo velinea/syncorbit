@@ -6,13 +6,14 @@ body {
 }
 
 header {
-  padding: 12px 20px;
+  padding: 12px 10px;
   border-bottom: 1px solid #222;
   background: #111827;
 }
 
 h1 {
-  margin: 0;
+  display: inline;
+  margin-left: 1em;
 }
 
 main {
@@ -31,6 +32,13 @@ main {
 
 .card h2 {
   margin-top: 0;
+}
+
+#logo {
+  width: 60px;
+  height: auto;
+  vertical-align: middle;
+  margin-right: 10px;
 }
 
 #searchBox {
@@ -115,4 +123,40 @@ button:disabled {
   background: #020617;
   border-radius: 6px;
   border: 1px solid #374151;
+}
+#libraryTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+#libraryTable th,
+#libraryTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #1f2937;
+}
+
+#libraryTable th {
+  background: #0f172a;
+  text-align: left;
+}
+
+.status-synced {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.status-adjust {
+  color: #eab308;
+  font-weight: 600;
+}
+
+.status-bad {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.note {
+  margin-top: 10px;
+  color: #93c5fd;
 }

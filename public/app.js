@@ -163,3 +163,68 @@ function drawGraph(offsets) {
 
 // Initial clear
 clearGraph()
+
+function safe(v, digits = 3) {
+  return typeof v === 'number' && !isNaN(v) ? v.toFixed(digits) : '–'
+}
+
+// ---------------- LIBRARY RESULTS ----------------
+
+const loadLibraryBtn = document.getElementById('loadLibraryBtn')
+const libraryTable = document
+  .getElementById('libraryTable')
+  .querySelector('tbody')
+const libNote = document.getElementById('libNote')
+
+loadLibraryBtn.addEventListener('click', loadLibrary)
+
+async function loadLibrary() {
+  libraryTable.innerHTML = "<tr><td colspan='5'>Loading…</td></tr>"
+
+  try {
+    const res = await fetch('/api/library')
+    const rows = await res.json()
+
+    if (rows.error === 'no_summary_file') {
+      libraryTable.innerHTML =
+        "<tr><td colspan='5'>No summary file found.</td></tr>"
+      return
+    }
+    libraryTable.innerHTML = ''
+
+    rows.forEach((r) => {
+      const tr = document.createElement('tr')
+
+      const statusClass =
+        r.decision === 'synced'
+          ? 'status-synced'
+          : r.decision === 'needs_adjustment'
+          ? 'status-adjust'
+          : 'status-bad'
+
+      tr.innerHTML = `
+        <td>${r.movie}</td>
+        <td>${safe(r.anchor_count)}</td>
+        <td>${safe(r.avg_offset)}</td>
+        <td>${safe(r.drift_span)}</td>
+        <td class="${statusClass}">${r.decision}</td>
+      `
+
+      // Click row → open in Align view
+      tr.addEventListener('click', () => {
+        searchBox.value = r.movie
+        runSearch(r.movie)
+        summaryPre.textContent = `Selected from library: ${r.movie}`
+        clearGraph()
+      })
+
+      libraryTable.appendChild(tr)
+    })
+
+    libNote.textContent = 'Click any movie to analyze subtitle pairs in detail.'
+  } catch (e) {
+    libraryTable.innerHTML =
+      "<tr><td colspan='5'>Error loading summary.</td></tr>"
+    console.error('library error', e)
+  }
+}
