@@ -1,65 +1,43 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SyncOrbit</title>
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>SyncOrbit — Subtitle Alignment</h1>
+    </header>
 
-<head>
-    <meta charset="utf-8">
-    <title>SyncOrbit Prototype</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            font-family: system-ui, sans-serif;
-            background: #111;
-            color: #eee;
-            padding: 20px;
-        }
+    <main>
+      <section class="card">
+        <h2>Search Subtitles</h2>
+        <input id="searchBox" type="text" placeholder="Search movie…" />
+        <div id="results"></div>
+      </section>
 
-        input[type=text] {
-            width: 500px;
-        }
+      <section class="card">
+        <h2>Selected Pair</h2>
+        <div class="paths">
+          <div>
+            <label>Reference (EN)</label>
+            <input id="refPath" type="text" readonly />
+          </div>
+          <div>
+            <label>Target (FI)</label>
+            <input id="targetPath" type="text" readonly />
+          </div>
+        </div>
+        <button id="alignBtn" disabled>Align</button>
+      </section>
 
-        .row {
-            margin-bottom: 8px;
-        }
-
-        #summary {
-            white-space: pre;
-            background: #181818;
-            padding: 10px;
-            border-radius: 6px;
-            max-width: 900px;
-        }
-
-        canvas {
-            background: #181818;
-            border-radius: 6px;
-            margin-top: 10px;
-        }
-    </style>
-</head>
-
-<body>
-    <h1>SyncOrbit 🛰 Subtitle Alignment</h1>
-    <h2>Subtitle Search</h2>
-    <input id="subSearch" placeholder="Search subtitles...">
-    <ul id="subResults"></ul>
-
-    <div class="row">
-        <label>Reference (well-timed, e.g. English):</label><br>
-        <input type="text" id="refPath" placeholder="/data/media/subs/movie.eng.srt">
-    </div>
-    <div class="row">
-        <label>Target (to fix, e.g. Finnish):</label><br>
-        <input type="text" id="tgtPath" placeholder="/data/media/subs/movie.fin.srt">
-    </div>
-    <button id="runBtn">Analyze</button>
-
-    <h2>Summary</h2>
-    <div id="summary"></div>
-
-    <h2>Drift over time (target - reference, seconds)</h2>
-    <canvas id="driftChart" width="900" height="300"></canvas>
-
-    <script src="app.js"></script>
-</body>
-
+      <section class="card">
+        <h2>Result</h2>
+        <pre id="summary">(no data)</pre>
+        <canvas id="graphCanvas"></canvas>
+      </section>
+    </main>
+  </body>
 </html>

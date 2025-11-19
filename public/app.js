@@ -1,14 +1,72 @@
-let driftChart = null
+const searchBox = document.getElementById('searchBox')
+const resultsDiv = document.getElementById('results')
+const refPathInput = document.getElementById('refPath')
+const targetPathInput = document.getElementById('targetPath')
+const alignBtn = document.getElementById('alignBtn')
+const summaryPre = document.getElementById('summary')
+const canvas = document.getElementById('graphCanvas')
 
-document.getElementById('runBtn').addEventListener('click', async () => {
-  const reference = document.getElementById('refPath').value.trim()
-  const target = document.getElementById('tgtPath').value.trim()
+let searchTimer = null
+
+// ------------- SEARCH -------------
+
+searchBox.addEventListener('input', () => {
+  clearTimeout(searchTimer)
+  const q = searchBox.value.trim()
+  if (q.length < 2) {
+    resultsDiv.innerHTML = ''
+    return
+  }
+  searchTimer = setTimeout(() => runSearch(q), 250)
+})
+
+async function runSearch(q) {
+  resultsDiv.innerHTML = 'Searching…'
+  try {
+    const res = await fetch(`/api/searchsubs?q=${encodeURIComponent(q)}`)
+    const groups = await res.json()
+
+    if (!Array.isArray(groups) || groups.length === 0) {
+      resultsDiv.innerHTML = 'No matches.'
+      return
+    }
+
+    resultsDiv.innerHTML = ''
+    groups.forEach((g) => {
+      const div = document.createElement('div')
+      div.className = 'result-item'
+      div.textContent = g.base
+
+      div.onclick = () => {
+        // Prefer EN as reference, FI as target
+        refPathInput.value = g.en || ''
+        targetPathInput.value = g.fi || ''
+        alignBtn.disabled = !(refPathInput.value && targetPathInput.value)
+        summaryPre.textContent = `Selected: ${g.base}\nEN: ${
+          g.en || '-'
+        }\nFI: ${g.fi || '-'}`
+        clearGraph()
+      }
+
+      resultsDiv.appendChild(div)
+    })
+  } catch (e) {
+    console.error('search error', e)
+    resultsDiv.innerHTML = 'Error during search.'
+  }
+}
+
+// ------------- ALIGN -------------
+
+alignBtn.addEventListener('click', async () => {
+  const reference = refPathInput.value.trim()
+  const target = targetPathInput.value.trim()
   if (!reference || !target) {
-    alert('Please fill both paths')
+    summaryPre.textContent = 'Reference and target required.'
     return
   }
 
-  document.getElementById('summary').textContent = 'Running analysis...'
+  summaryPre.textContent = 'Running align.py…'
 
   try {
     const res = await fetch('/api/align', {
@@ -18,106 +76,90 @@ document.getElementById('runBtn').addEventListener('click', async () => {
     })
 
     const data = await res.json()
-    if (!res.ok) {
-      document.getElementById('summary').textContent =
-        'Error:\n' + JSON.stringify(data, null, 2)
+    if (data.error) {
+      summaryPre.textContent = `Error: ${data.error}\n${data.detail || ''}`
+      clearGraph()
       return
     }
 
-    document.getElementById('summary').textContent = JSON.stringify(
-      {
-        eng_path: data.eng_path,
-        fin_path: data.fin_path,
-        eng_count: data.eng_count,
-        fin_count: data.fin_count,
-        anchor_count: data.anchor_count,
-        avg_offset_sec: data.avg_offset_sec,
-        min_offset_sec: data.min_offset_sec,
-        max_offset_sec: data.max_offset_sec,
-        drift_span_sec: data.drift_span_sec,
-      },
-      null,
-      2
-    )
-
-    drawDriftChart(data.drift || [])
+    renderSummary(data)
+    drawGraph(data.offsets || [])
   } catch (e) {
-    document.getElementById('summary').textContent = 'Exception: ' + e
+    console.error('align error', e)
+    summaryPre.textContent = 'Align failed: ' + e.message
+    clearGraph()
   }
 })
 
-document.getElementById('subSearch').addEventListener('input', async (e) => {
-  const q = e.target.value.trim()
-  if (q.length < 2) return
+// ------------- SUMMARY -------------
 
-  const res = await fetch('/api/searchsubs?q=' + encodeURIComponent(q))
-  const items = await res.json()
+function renderSummary(d) {
+  const anchors = d.anchor_count ?? 0
+  const avg = Number(d.avg_offset_sec ?? 0)
+  const span = Number(d.drift_span_sec ?? 0)
+  const min = Number(d.min_offset_sec ?? 0)
+  const max = Number(d.max_offset_sec ?? 0)
+  const decision = d.decision ?? 'unknown'
 
-  const ul = document.getElementById('subResults')
-  ul.innerHTML = ''
-
-  items.forEach((item) => {
-    const li = document.createElement('li')
-
-    li.innerHTML = `
-      <strong>${item.base}</strong><br>
-      EN: ${item.en || '<i>missing</i>'}<br>
-      FI: ${item.fi || '<i>missing</i>'}
-    `
-
-    li.style.cursor = 'pointer'
-
-    li.addEventListener('click', () => {
-      // Preferred behavior:
-      // EN becomes reference, FI becomes target
-      if (item.en) document.getElementById('refPath').value = item.en
-      if (item.fi) document.getElementById('tgtPath').value = item.fi
-
-      // If English missing → assume the clicked file is reference
-      if (!item.en && item.fi) {
-        document.getElementById('refPath').value = item.fi
-      }
-
-      // Optionally auto-scroll to analysis section
-      document.getElementById('refPath').focus()
-    })
-
-    ul.appendChild(li)
-  })
-})
-
-function drawDriftChart(drift) {
-  const ctx = document.getElementById('driftChart').getContext('2d')
-  const labels = drift.map((p) => p.t)
-  const offsets = drift.map((p) => p.offset)
-
-  if (driftChart) {
-    driftChart.destroy()
-  }
-
-  driftChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Offset (sec)',
-          data: offsets,
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.2,
-        },
-      ],
-    },
-    options: {
-      scales: {
-        x: {
-          title: { display: true, text: 'Reference time (sec)' },
-        },
-        y: {
-          title: { display: true, text: 'Target - Reference (sec)' },
-        },
-      },
-    },
-  })
+  summaryPre.textContent =
+    `Ref:        ${d.ref_path}\n` +
+    `Target:     ${d.target_path}\n\n` +
+    `Ref lines:  ${d.ref_count}\n` +
+    `Tgt lines:  ${d.target_count}\n` +
+    `Anchors:    ${anchors}\n` +
+    `Avg offset: ${avg.toFixed(3)} s\n` +
+    `Drift span: ${span.toFixed(3)} s\n` +
+    `Min / Max:  ${min.toFixed(3)} s  /  ${max.toFixed(3)} s\n` +
+    `Decision:   ${decision}`
 }
+
+// ------------- GRAPH -------------
+
+function clearGraph() {
+  const ctx = canvas.getContext('2d')
+  const W = (canvas.width = canvas.clientWidth || 600)
+  const H = (canvas.height = canvas.clientHeight || 220)
+  ctx.fillStyle = '#020617'
+  ctx.fillRect(0, 0, W, H)
+}
+
+function drawGraph(offsets) {
+  const ctx = canvas.getContext('2d')
+  const W = (canvas.width = canvas.clientWidth || 600)
+  const H = (canvas.height = canvas.clientHeight || 220)
+
+  ctx.fillStyle = '#020617'
+  ctx.fillRect(0, 0, W, H)
+
+  if (!offsets.length) return
+
+  // Extract arrays
+  const xs = offsets.map((o) => o.ref_t ?? o.t_ref ?? 0)
+  const ys = offsets.map((o) => o.delta ?? 0)
+
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+
+  const spanX = maxX - minX || 1
+  const spanY = maxY - minY || 1
+
+  ctx.strokeStyle = '#22c55e'
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+
+  offsets.forEach((o, i) => {
+    const x = (((o.ref_t ?? o.t_ref ?? 0) - minX) / spanX) * W
+    const yVal = o.delta ?? 0
+    const y = H - ((yVal - minY) / spanY) * H
+
+    if (i === 0) ctx.moveTo(x, y)
+    else ctx.lineTo(x, y)
+  })
+
+  ctx.stroke()
+}
+
+// Initial clear
+clearGraph()
