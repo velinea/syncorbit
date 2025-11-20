@@ -73,7 +73,7 @@ function clearLibraryGraph() {
   clearCanvas(libraryCanvas)
 }
 
-function safe(v, digits = 3) {
+function safe(v, digits = 2) {
   return typeof v === 'number' && !isNaN(v) ? v.toFixed(digits) : '–'
 }
 
@@ -250,6 +250,16 @@ document.querySelectorAll('#libraryTable thead th[data-sort]').forEach((th) => {
   })
 })
 
+function shortTitle(t) {
+  return t.length > 20 ? t.slice(0, 17) + '…' : t
+}
+
+function shortStatus(s) {
+  if (s === 'synced') return 'ok'
+  if (s === 'needs_adjustment') return 'poor'
+  return 'bad'
+}
+
 function renderLibraryTable() {
   if (!libraryTableBody) return
 
@@ -302,11 +312,11 @@ function renderLibraryTable() {
         : 'status-bad'
 
     tr.innerHTML = `
-      <td>${r.movie}</td>
-      <td>${safe(r.anchor_count)}</td>
+      <td>${shortTitle(r.movie)}</td>
+      <td>${r.anchor_count}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
-      <td class="${statusClass}">${r.decision}</td>
+      <td class="${statusClass}">${shortStatus(r.decision)}</td>
     `
 
     tr.addEventListener('click', () => {

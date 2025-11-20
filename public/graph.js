@@ -32,6 +32,7 @@ export function drawGraph(canvas, anchors) {
     if (i === 0) ctx.moveTo(x, y)
     else ctx.lineTo(x, y)
   })
+
   ctx.stroke()
 
   // Draw points
@@ -40,7 +41,7 @@ export function drawGraph(canvas, anchors) {
     const x = toCanvasX(t)
     const y = toCanvasY(ys[i])
     ctx.beginPath()
-    ctx.arc(x, y, 3, 0, Math.PI * 2)
+    ctx.arc(x, y, 2, 0, Math.PI * 2)
     ctx.fill()
   })
 
@@ -94,4 +95,73 @@ export function drawGraph(canvas, anchors) {
   canvas.onmouseleave = () => {
     tip.style.display = 'none'
   }
+}
+
+function cubicSpline(xs, ys) {
+  const n = xs.length
+  if (n < 3) return { xs, ys } // not enough points to spline
+
+  const a = ys.slice()
+  const b = Array(n).fill(0)
+  const d = Array(n).fill(0)
+  const h = Array(n - 1)
+
+  for (let i = 0; i < n - 1; i++) {
+    h[i] = xs[i + 1] - xs[i]
+  }
+
+  // Build tridiagonal system
+  const alpha = Array(n - 1).fill(0)
+  for (let i = 1; i < n - 1; i++) {
+    alpha[i] =
+      (3 / h[i]) * (a[i + 1] - a[i]) - (3 / h[i - 1]) * (a[i] - a[i - 1])
+  }
+
+  const c = Array(n).fill(0)
+  const l = Array(n).fill(0)
+  const mu = Array(n).fill(0)
+  const z = Array(n).fill(0)
+
+  l[0] = 1
+  mu[0] = 0
+  z[0] = 0
+
+  for (let i = 1; i < n - 1; i++) {
+    l[i] = 2 * (xs[i + 1] - xs[i - 1]) - h[i - 1] * mu[i - 1]
+    mu[i] = h[i] / l[i]
+    z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i]
+  }
+
+  l[n - 1] = 1
+  z[n - 1] = 0
+  c[n - 1] = 0
+
+  for (let j = n - 2; j >= 0; j--) {
+    c[j] = z[j] - mu[j] * c[j + 1]
+    b[j] = (a[j + 1] - a[j]) / h[j] - (h[j] * (c[j + 1] + 2 * c[j])) / 3
+    d[j] = (c[j + 1] - c[j]) / (3 * h[j])
+  }
+
+  // Build interpolated curve (dense x points)
+  const denseX = []
+  const denseY = []
+
+  const STEPS = 6 // samples per interval (smoothness)
+  for (let i = 0; i < n - 1; i++) {
+    const step = (xs[i + 1] - xs[i]) / STEPS
+    for (let k = 0; k < STEPS; k++) {
+      const x = xs[i] + k * step
+      const dx = x - xs[i]
+      const y = a[i] + b[i] * dx + c[i] * dx * dx + d[i] * dx * dx * dx
+
+      denseX.push(x)
+      denseY.push(y)
+    }
+  }
+
+  // Add final point
+  denseX.push(xs[n - 1])
+  denseY.push(ys[n - 1])
+
+  return { xs: denseX, ys: denseY }
 }

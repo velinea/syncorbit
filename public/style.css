@@ -1,6 +1,6 @@
 body {
   margin: 0.5em auto;
-  padding: 0 20px; /* adds nice side margins on all screens */
+  padding: 0 10px; /* adds nice side margins on all screens */
   max-width: 1800px; /* expanded */
   background: #0b1522;
   color: #f4f4f4;
@@ -33,12 +33,18 @@ h1 {
   box-shadow: 0 0 10px #0006;
 }
 
-.card h2 {
-  margin-top: 0;
+.card h2,
+.card h3 {
+  display: inline;
+}
+
+.card h3 {
+  float: right;
+  margin-right: 20px;
 }
 
 #logo {
-  width: 60px;
+  width: 80px;
   height: auto;
   margin-right: 10px;
 }
@@ -46,10 +52,8 @@ h1 {
 /* Tabs */
 
 #tabs {
-  max-width: 900px;
-  margin: 2px auto 0;
-  padding: 0 20px;
-  display: flex;
+  padding-left: 300px;
+  display: inline;
   gap: 8px;
 }
 
@@ -124,8 +128,7 @@ h1 {
 }
 
 button {
-  margin-top: 14px;
-  padding: 10px 18px;
+  padding: 10px;
   border: none;
   border-radius: 8px;
   background: #22c55e;
@@ -190,8 +193,8 @@ button:disabled {
 
 #libraryArea {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 700px;
+  gap: 6px;
   margin-top: 14px;
 }
 
@@ -208,13 +211,15 @@ button:disabled {
 #libraryTable {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 12px;
+  margin-top: 6px;
+  font-size: 13px;
 }
 
 #libraryTable th,
 #libraryTable td {
-  padding: 8px 10px;
+  padding: 4px 6px;
   border-bottom: 1px solid #1f2937;
+  line-height: 1.1;
 }
 
 #libraryTable th {
@@ -264,7 +269,7 @@ button:disabled {
   padding: 10px;
   border: 1px solid #374151;
   margin-top: 4px;
-  max-height: 180px;
+  max-height: 250px;
   overflow-y: auto;
   font-size: 13px;
 }

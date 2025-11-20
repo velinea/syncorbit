@@ -127,6 +127,31 @@ app.get('/api/library', (req, res) => {
     'python',
     'syncorbit_library_summary.csv'
   )
+  function parseCSVLine(line) {
+    const result = []
+    let current = ''
+    let insideQuotes = false
+
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i]
+
+      if (c === '"') {
+        insideQuotes = !insideQuotes
+        continue
+      }
+
+      if (c === ',' && !insideQuotes) {
+        result.push(current)
+        current = ''
+        continue
+      }
+
+      current += c
+    }
+
+    result.push(current)
+    return result
+  }
 
   if (!fs.existsSync(CSV)) {
     return res.json({ error: 'no_summary_file' })
@@ -136,7 +161,8 @@ app.get('/api/library', (req, res) => {
     const raw = fs.readFileSync(CSV, 'utf8').trim().split('\n').filter(Boolean)
 
     const rows = raw.map((line) => {
-      const parts = line.split(',')
+      const parts = parseCSVLine(line)
+      const movie = parts[0].replace(/^"|"$/g, '')
       return {
         movie: parts[0].trim(),
         anchor_count: Number(parts[1]),
