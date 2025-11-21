@@ -10,7 +10,7 @@
   </head>
   <body>
     <header>
-      <img src="logo.png" id="logo" />
+      <img src="logo.png" id="logo" alt="logo" />
       <h1>Subtitle Alignment</h1>
       <!-- Top-level tabs -->
       <nav id="tabs">
@@ -23,20 +23,15 @@
       <!-- LIBRARY TAB -->
       <div id="tab-library" class="tab active">
         <section class="card">
-          <h2>Library Results</h2>
-          <h3>Selected Analysis</h3>
+          <h3>
+            <span>Library Results</span>
+            <span>Selected Analysis</span>
+          </h3>
 
           <div class="library-controls">
             <button id="loadLibraryBtn">Reload summary</button>
 
             <input id="librarySearch" type="text" placeholder="Search movie…" />
-
-            <select id="libraryStatus">
-              <option value="">All statuses</option>
-              <option value="synced">Synced</option>
-              <option value="needs_adjustment">Poor</option>
-              <option value="whisper_required">Bad</option>
-            </select>
 
             <label class="library-limit-label">
               Show
@@ -48,6 +43,13 @@
               </select>
               rows
             </label>
+
+            <select id="libraryStatus">
+              <option value="">All</option>
+              <option value="synced">Synced</option>
+              <option value="needs_adjustment">Poor</option>
+              <option value="whisper_required">Bad</option>
+            </select>
           </div>
 
           <div id="libraryArea">
