@@ -22,6 +22,8 @@ const libraryStatusSelect = document.getElementById('libraryStatus')
 const libraryLimitSelect = document.getElementById('libraryLimit')
 const librarySummaryPre = document.getElementById('librarySummary')
 const libraryCanvas = document.getElementById('libraryGraph')
+const autoCorrectBtn = document.getElementById('autoCorrectBtn')
+const autoCorrectResult = document.getElementById('autoCorrectResult')
 
 // Tabs
 const tabButtons = document.querySelectorAll('#tabs button')
@@ -32,6 +34,8 @@ let searchTimer = null
 let libraryRows = []
 let librarySortKey = 'movie'
 let librarySortDir = 'asc'
+let currentLibraryRow = null
+let currentLibraryAnalysis = null
 
 // -------- TAB SWITCHING --------
 
@@ -225,6 +229,70 @@ async function loadLibrary() {
   }
 }
 
+if (autoCorrectBtn) {
+  autoCorrectBtn.addEventListener('click', onAutoCorrectClick)
+}
+
+async function onAutoCorrectClick() {
+  if (!currentLibraryRow || !currentLibraryAnalysis) {
+    autoCorrectResult.textContent = 'Select a movie with analysis first.'
+    return
+  }
+
+  const target = currentLibraryAnalysis.target_path
+  const syncinfoPath = currentLibraryRow.syncinfo_path
+
+  if (!target || !syncinfoPath) {
+    autoCorrectResult.textContent =
+      'Missing target_path or syncinfo_path, cannot auto-correct.'
+    return
+  }
+
+  autoCorrectBtn.disabled = true
+  autoCorrectResult.textContent = 'Running auto-correction…'
+
+  try {
+    const res = await fetch('/api/autocorrect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target, syncinfo_path: syncinfoPath }),
+    })
+
+    const data = await res.json()
+
+    if (data.status === 'ok') {
+      const m = data.method
+      const out = data.output_file
+      const meta = data.meta || {}
+      let detail = ''
+
+      if (m === 'global_offset') {
+        detail = `Global shift: ${meta.shift_sec?.toFixed?.(3)} s`
+      } else if (m === 'stretch_offset') {
+        const stretchPct = ((meta.stretch - 1) * 100).toFixed(3)
+        detail = `Stretch: ${stretchPct}%  Shift: ${meta.shift_sec?.toFixed?.(
+          3
+        )} s`
+      }
+
+      autoCorrectResult.textContent = `Auto-corrected (${m}). Output: ${out}\n${detail}`
+    } else if (data.status === 'whisper_required') {
+      autoCorrectResult.textContent =
+        'Cannot auto-correct safely. Marked as whisper_required.'
+    } else {
+      autoCorrectResult.textContent = `Auto-correct failed: ${
+        data.error || data.status
+      }`
+    }
+  } catch (e) {
+    console.error('autocorrect error', e)
+    autoCorrectResult.textContent = 'Auto-correct failed: ' + e.message
+  } finally {
+    // Re-enable so user can retry
+    autoCorrectBtn.disabled = false
+  }
+}
+
 // Filters
 if (librarySearchInput) {
   librarySearchInput.addEventListener('input', renderLibraryTable)
@@ -258,6 +326,14 @@ function shortStatus(s) {
   if (s === 'synced') return 'ok'
   if (s === 'needs_adjustment') return 'poor'
   return 'bad'
+}
+
+function autoFixLabel(r) {
+  // Very rough: synced or small drift = ok
+  if (r.decision === 'synced') return 'ok'
+  if (r.decision === 'needs_adjustment') return 'maybe'
+  if (r.decision === 'bad') return 'no'
+  return 'no'
 }
 
 function renderLibraryTable() {
@@ -332,10 +408,18 @@ async function openLibraryAnalysis(row) {
     librarySummaryPre.textContent =
       'No analysis.syncinfo found for this movie folder.'
     clearLibraryGraph()
+    currentLibraryRow = null
+    currentLibraryAnalysis = null
+    if (autoCorrectBtn) {
+      autoCorrectBtn.disabled = true
+      autoCorrectResult.textContent = ''
+    }
     return
   }
 
   librarySummaryPre.textContent = 'Loading analysis…'
+  autoCorrectResult.textContent = ''
+  if (autoCorrectBtn) autoCorrectBtn.disabled = true
 
   try {
     const res = await fetch(
@@ -346,15 +430,31 @@ async function openLibraryAnalysis(row) {
     if (data.error) {
       librarySummaryPre.textContent = 'Error: ' + data.error
       clearLibraryGraph()
+      currentLibraryRow = null
+      currentLibraryAnalysis = null
+      if (autoCorrectBtn) autoCorrectBtn.disabled = true
       return
     }
 
+    // Remember for autocorrect
+    currentLibraryRow = row
+    currentLibraryAnalysis = data
+
     renderSummary(data, librarySummaryPre)
     drawGraph(libraryCanvas, data.offsets || [])
+    // We can auto-correct only if we know target_path
+    if (autoCorrectBtn && data.target_path) {
+      autoCorrectBtn.disabled = false
+      autoCorrectResult.textContent =
+        'Ready for auto-correction using current analysis.'
+    }
   } catch (e) {
     console.error('movieinfo error', e)
     librarySummaryPre.textContent = 'Failed to load analysis: ' + e.message
     clearLibraryGraph()
+    currentLibraryRow = null
+    currentLibraryAnalysis = null
+    if (autoCorrectBtn) autoCorrectBtn.disabled = true
   }
 }
 

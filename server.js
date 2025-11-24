@@ -197,4 +197,43 @@ app.get('/api/movieinfo', (req, res) => {
   })
 })
 
+app.post('/api/autocorrect', (req, res) => {
+  const { target, syncinfo_path } = req.body
+
+  if (!target || !syncinfo_path) {
+    return res.status(400).json({ error: 'target and syncinfo_path required' })
+  }
+
+  const py = spawn('python3', ['python/autocorrect.py', target, syncinfo_path])
+
+  let out = ''
+  let errBuf = ''
+
+  py.stdout.on('data', (d) => (out += d.toString()))
+  py.stderr.on('data', (d) => (errBuf += d.toString()))
+
+  py.on('close', (code) => {
+    if (!out.trim()) {
+      return res.status(500).json({
+        status: 'error',
+        error: 'no_output',
+        detail: errBuf || `exit ${code}`,
+      })
+    }
+
+    try {
+      const data = JSON.parse(out)
+      res.json(data)
+    } catch (e) {
+      res.status(500).json({
+        status: 'error',
+        error: 'bad_json',
+        detail: String(e),
+        raw: out,
+        stderr: errBuf,
+      })
+    }
+  })
+})
+
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'))
