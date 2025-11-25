@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-import sys, json, re
+import json
+import re
+import sys
 from datetime import timedelta
 
 time_re = re.compile(r"(\d+):(\d+):(\d+),(\d+)")
 
+
 def parse_time(t):
     h, m, s, ms = map(int, time_re.match(t).groups())
     return timedelta(hours=h, minutes=m, seconds=s, milliseconds=ms)
+
 
 def load_srt(path):
     entries = []
@@ -25,6 +29,7 @@ def load_srt(path):
                 block.append(line)
     return entries
 
+
 def compare_srt(base_path, ref_path):
     base = load_srt(base_path)
     ref = load_srt(ref_path)
@@ -37,7 +42,9 @@ def compare_srt(base_path, ref_path):
     min_off, max_off = min(offsets), max(offsets)
     drift = max_off - min_off
 
-    samples = [{"i": i, "offset": round(offsets[i], 2)} for i in range(0, n, max(1, n//20))]
+    samples = [
+        {"i": i, "offset": round(offsets[i], 2)} for i in range(0, n, max(1, n // 20))
+    ]
 
     return {
         "pairs": n,
@@ -45,8 +52,9 @@ def compare_srt(base_path, ref_path):
         "min_offset_sec": round(min_off, 2),
         "max_offset_sec": round(max_off, 2),
         "drift_sec": round(drift, 2),
-        "samples": samples
+        "samples": samples,
     }
+
 
 if __name__ == "__main__":
     base, ref = sys.argv[1], sys.argv[2]

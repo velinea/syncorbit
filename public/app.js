@@ -180,7 +180,7 @@ if (alignBtn) {
       }
 
       renderSummary(data, summaryPre)
-      drawGraph(manualCanvas, data.offsets || [])
+      drawGraph(manualCanvas, data.clean_offsets || data.offsets || [])
     } catch (e) {
       console.error('align error', e)
       summaryPre.textContent = 'Align failed: ' + e.message
@@ -441,7 +441,8 @@ async function openLibraryAnalysis(row) {
     currentLibraryAnalysis = data
 
     renderSummary(data, librarySummaryPre)
-    drawGraph(libraryCanvas, data.offsets || [])
+
+    drawGraph(libraryCanvas, data.clean_offsets || data.offsets || [])
     // We can auto-correct only if we know target_path
     if (autoCorrectBtn && data.target_path) {
       autoCorrectBtn.disabled = false

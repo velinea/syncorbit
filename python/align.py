@@ -30,22 +30,23 @@ Outputs JSON to stdout with fields:
     }
 """
 
-import sys
-import re
 import json
+import re
+import statistics
+import sys
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import List, Tuple
 
 import numpy as np
 from rapidfuzz import fuzz
-from sentence_transformers import SentenceTransformer, util as st_util
-
+from sentence_transformers import SentenceTransformer
+from sentence_transformers import util as st_util
 
 # ---------------- CONFIG TUNABLES ---------------- #
 
 # Similarity threshold for raw matches
-MIN_SIM = 0.40      # was ~0.35; you can push up/down a bit
+MIN_SIM = 0.40  # was ~0.35; you can push up/down a bit
 
 # Max ratio between longer/shorter text lengths
 MAX_LEN_RATIO = 1.5  # you saw 3 → good results
@@ -57,8 +58,8 @@ MAX_DUR_RATIO = 1.5
 MIN_CHARS = 10
 
 # Residual threshold bounds for regression-based cleanup
-RESID_MIN = 0.8     # don't be tighter than this
-RESID_MAX = 1.8     # don't be looser than this
+RESID_MIN = 0.8  # don't be tighter than this
+RESID_MAX = 1.8  # don't be looser than this
 RESID_MAD_FACTOR = 3.0  # scale median absolute deviation
 
 
@@ -69,11 +70,12 @@ SRT_TIME_RE = re.compile(r"(\d+):(\d+):(\d+),(\d+)")
 class Cue:
     index: int
     start: float  # seconds
-    end: float    # seconds
+    end: float  # seconds
     text: str
 
 
 # ---------- SRT parsing ----------
+
 
 def parse_time(t: str) -> float:
     m = SRT_TIME_RE.match(t.strip())
@@ -96,7 +98,9 @@ def load_srt(path: str) -> List[Cue]:
                     if len(times) == 2:
                         start = parse_time(times[0])
                         end = parse_time(times[1])
-                        text_lines = [re.sub(r"<.*?>", "", t).strip() for t in block[2:]]
+                        text_lines = [
+                            re.sub(r"<.*?>", "", t).strip() for t in block[2:]
+                        ]
                         text = " ".join(l for l in text_lines if l)
                         if text:
                             cues.append(Cue(len(cues), start, end, text))
@@ -119,6 +123,7 @@ def load_srt(path: str) -> List[Cue]:
 
 
 # ---------- Similarity + alignment ----------
+
 
 def compute_embeddings(model, texts: List[str]) -> np.ndarray:
     # Normalize embeddings to unit length (cosine similarity)
@@ -153,7 +158,9 @@ def build_similarity_matrix(
     return sim
 
 
-def align_sequences(sim: np.ndarray, gap_penalty: float = 0.15) -> List[Tuple[int, int, float]]:
+def align_sequences(
+    sim: np.ndarray, gap_penalty: float = 0.15
+) -> List[Tuple[int, int, float]]:
     """
     Dynamic programming global alignment (Needleman–Wunsch style).
     Returns list of (ref_index, tgt_index, similarity).
@@ -210,8 +217,19 @@ def align_sequences(sim: np.ndarray, gap_penalty: float = 0.15) -> List[Tuple[in
 # ---------- Anchor filtering & metrics ----------
 
 FILLER_SET = {
-    "yes", "yeah", "yep", "no", "ok", "okay", "oh", "ah",
-    "mm", "hmm", "hey", "hi", "bye",
+    "yes",
+    "yeah",
+    "yep",
+    "no",
+    "ok",
+    "okay",
+    "oh",
+    "ah",
+    "mm",
+    "hmm",
+    "hey",
+    "hi",
+    "bye",
     # you can expand this with Finnish fillers too if needed
 }
 
@@ -260,16 +278,18 @@ def build_raw_anchors(
         if score < MIN_SIM:
             continue
 
-        raw.append({
-            "ref_index": r.index,
-            "tgt_index": t.index,
-            "ref_t": r.start,
-            "tgt_t": t.start,
-            "delta": t.start - r.start,
-            "score": score,
-            "len_ratio": len_ratio,
-            "dur_ratio": dur_ratio,
-        })
+        raw.append(
+            {
+                "ref_index": r.index,
+                "tgt_index": t.index,
+                "ref_t": r.start,
+                "tgt_t": t.start,
+                "delta": t.start - r.start,
+                "score": score,
+                "len_ratio": len_ratio,
+                "dur_ratio": dur_ratio,
+            }
+        )
 
     # keep in time order
     raw.sort(key=lambda a: a["ref_t"])
@@ -385,9 +405,13 @@ def decide_quality(anchor_count: int, avg_offset: float, drift_span: float) -> s
 
 # ---------- Main ----------
 
+
 def main():
     if len(sys.argv) != 3:
-        print("Usage: align.py /path/to/reference.srt /path/to/target.srt", file=sys.stderr)
+        print(
+            "Usage: align.py /path/to/reference.srt /path/to/target.srt",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     ref_path = sys.argv[1]
@@ -397,13 +421,17 @@ def main():
     tgt_cues = load_srt(tgt_path)
 
     if not ref_cues or not tgt_cues:
-        print(json.dumps({
-            "error": "empty_subtitles",
-            "ref_path": ref_path,
-            "target_path": tgt_path,
-            "ref_count": len(ref_cues),
-            "target_count": len(tgt_cues),
-        }))
+        print(
+            json.dumps(
+                {
+                    "error": "empty_subtitles",
+                    "ref_path": ref_path,
+                    "target_path": tgt_path,
+                    "ref_count": len(ref_cues),
+                    "target_count": len(tgt_cues),
+                }
+            )
+        )
         return
 
     # Model choice: multilingual, good balance
@@ -420,13 +448,54 @@ def main():
     aligned = align_sequences(sim)
 
     raw_anchors = build_raw_anchors(ref_cues, tgt_cues, aligned)
-    cleaned = clean_anchors_regression(raw_anchors)
-    metrics = compute_metrics(cleaned)
 
+    # IMPORTANT CHANGE:
+    # We no longer run clean_anchors_regression() here.
+    # We let compute_metrics() see all raw anchors,
+    # then we do robust outlier filtering after.
+    metrics = compute_metrics(raw_anchors)
+
+    # ----------------------------------------------
+    # Robust drift analysis (MAD-based)
+    # ----------------------------------------------
+    import statistics
+
+    offsets = metrics["offsets"]  # list of anchor dicts
+
+    deltas = [o.get("delta") or o.get("offset") or 0.0 for o in offsets]
+
+    if deltas:
+        median_delta = statistics.median(deltas)
+        mad = statistics.median([abs(d - median_delta) for d in deltas]) or 1e-6
+
+        clean = []
+        outliers = []
+        for o in offsets:
+            d = o.get("delta") or o.get("offset") or 0.0
+            if abs(d - median_delta) <= 2.5 * mad:
+                clean.append(o)
+            else:
+                outliers.append(o)
+
+        robust_span = 4.0 * mad
+
+        # robust versions of metrics
+        anchor_count_clean = len(clean)
+        avg_offset_clean = median_delta  # robust "average"
+    else:
+        median_delta = 0.0
+        mad = 1e-6
+        clean = []
+        outliers = []
+        robust_span = 0.0
+        anchor_count_clean = 0
+        avg_offset_clean = 0.0
+
+    # Decision now based on ROBUST metrics
     decision = decide_quality(
-        metrics["anchor_count"],
-        metrics["avg_offset_sec"],
-        metrics["drift_span_sec"],
+        anchor_count_clean,
+        avg_offset_clean,
+        robust_span,
     )
 
     out = {
@@ -434,12 +503,22 @@ def main():
         "target_path": tgt_path,
         "ref_count": len(ref_cues),
         "target_count": len(tgt_cues),
-        "anchor_count": metrics["anchor_count"],
-        "avg_offset_sec": metrics["avg_offset_sec"],
-        "min_offset_sec": metrics["min_offset_sec"],
-        "max_offset_sec": metrics["max_offset_sec"],
-        "drift_span_sec": metrics["drift_span_sec"],
-        "offsets": metrics["offsets"],
+        # ROBUST versions become the main ones:
+        "anchor_count": anchor_count_clean,
+        "avg_offset_sec": avg_offset_clean,
+        "min_offset_sec": metrics["min_offset_sec"],  # still from raw
+        "max_offset_sec": metrics["max_offset_sec"],  # still from raw
+        "drift_span_sec": robust_span,
+        # Keep raw for debugging / advanced use if you want later:
+        "raw_anchor_count": metrics["anchor_count"],
+        "raw_drift_span_sec": metrics["drift_span_sec"],
+        # offsets:
+        "offsets": offsets,  # raw anchors
+        "clean_offsets": clean,  # robust-cleaned anchors
+        "outlier_offsets": outliers,  # spikes we threw out
+        "median_offset_sec": median_delta,
+        "mad_offset_sec": mad,
+        "robust_drift_span_sec": robust_span,
         "drift_curve": metrics["drift_curve"],
         "decision": decision,
     }

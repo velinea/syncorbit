@@ -1,9 +1,13 @@
-import sys, json, re
+import json
+import re
+import sys
 from datetime import timedelta
+
 
 def parse_time(t):
     h, m, s, ms = re.match(r"(\d+):(\d+):(\d+),(\d+)", t).groups()
     return timedelta(hours=int(h), minutes=int(m), seconds=int(s), milliseconds=int(ms))
+
 
 def analyze_srt(path):
     entries = []
@@ -23,18 +27,22 @@ def analyze_srt(path):
     if not entries:
         return {"error": "no subtitles"}
 
-    deltas = [(entries[i+1][0]-entries[i][1]).total_seconds() for i in range(len(entries)-1)]
-    avg_gap = sum(deltas)/len(deltas)
+    deltas = [
+        (entries[i + 1][0] - entries[i][1]).total_seconds()
+        for i in range(len(entries) - 1)
+    ]
+    avg_gap = sum(deltas) / len(deltas)
     negatives = sum(1 for d in deltas if d < 0)
-    total_drift = (entries[-1][0]-entries[0][0]).total_seconds()
+    total_drift = (entries[-1][0] - entries[0][0]).total_seconds()
 
     return {
         "total": len(entries),
         "avg_gap": round(avg_gap, 3),
         "overlaps": negatives,
         "duration": round(entries[-1][1].total_seconds(), 1),
-        "drift_sec": round(total_drift - entries[-1][1].total_seconds(), 3)
+        "drift_sec": round(total_drift - entries[-1][1].total_seconds(), 3),
     }
+
 
 if __name__ == "__main__":
     path = sys.argv[1]

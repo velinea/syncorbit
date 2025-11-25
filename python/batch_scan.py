@@ -7,14 +7,14 @@ Walks a movie library and generates:
     - syncorbit_library_summary.csv
 """
 
-import os
-import json
 import csv
-from pathlib import Path
+import json
+import os
 import subprocess
 import sys
+from pathlib import Path
 
-ROOT = "/home/antti/syncorbit/subs"     # change as needed
+ROOT = "/home/antti/syncorbit/subs"  # change as needed
 SYNCINFO_NAME = "analysis.syncinfo"
 SUMMARY_CSV = "syncorbit_library_summary.csv"
 
@@ -60,13 +60,15 @@ def append_summary_line(csv_path: Path, folder_name: str, data: dict):
         w = csv.writer(f)
         if not exists:
             w.writerow(["movie", "anchors", "avg_offset", "drift_span", "decision"])
-        w.writerow([
-            folder_name,
-            data["anchor_count"],
-            data["avg_offset_sec"],
-            data["drift_span_sec"],
-            data["decision"]
-        ])
+        w.writerow(
+            [
+                folder_name,
+                data["anchor_count"],
+                data["avg_offset_sec"],
+                data["drift_span_sec"],
+                data["decision"],
+            ]
+        )
 
 
 def main():
