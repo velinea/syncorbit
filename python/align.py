@@ -43,6 +43,13 @@ from rapidfuzz import fuzz
 from sentence_transformers import SentenceTransformer
 from sentence_transformers import util as st_util
 
+# Limit PyTorch threads for performance consistency
+import torch
+
+torch.set_num_threads(2)
+torch.set_num_interop_threads(2)
+
+
 # ---------------- CONFIG TUNABLES ---------------- #
 
 # Similarity threshold for raw matches
@@ -458,8 +465,6 @@ def main():
     # ----------------------------------------------
     # Robust drift analysis (MAD-based)
     # ----------------------------------------------
-    import statistics
-
     offsets = metrics["offsets"]  # list of anchor dicts
 
     deltas = [o.get("delta") or o.get("offset") or 0.0 for o in offsets]
