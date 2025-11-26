@@ -1,25 +1,19 @@
-# ===============================
-# SyncOrbit Runtime
-# ===============================
-FROM node:20-slim AS nodebase
+FROM node:20-slim
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip ffmpeg \
+    build-essential g++ python3-dev \
+    libatlas-base-dev gfortran \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install Python deps
 COPY python/requirements.txt python/requirements.txt
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3-pip ffmpeg build-essential g++ \
-    && rm -rf /var/lib/apt/lists/*
 RUN pip3 install --no-cache-dir -r python/requirements.txt
 
-# Install Node deps
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copy actual app
 COPY . .
 
 EXPOSE 5010
