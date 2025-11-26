@@ -3,9 +3,11 @@ FROM python:3.10-slim AS python-base
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     build-essential \
+    cmake \
     wget \
     curl \
     git \
+    vim \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
