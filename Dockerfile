@@ -15,14 +15,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# Build whisper.cpp
 FROM python-base AS whisper
 WORKDIR /app/whisper
+
+# Clone whisper.cpp
 RUN git clone --depth=1 https://github.com/ggerganov/whisper.cpp .
-# Download multilingual model (recommended)
+
+# Build modern whisper.cpp (uses CMake)
+RUN mkdir build && cd build && cmake .. && make -j4
+
+# Download multilingual model
 RUN wget -q https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin \
     -O ggml-small.bin
-RUN make -j4
 
 # Production/runtime
 FROM python-base AS runtime
