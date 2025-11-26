@@ -5,7 +5,7 @@ import fs from 'fs';
 import { exec } from 'child_process';
 
 const app = express();
-const ROOT = path.join(process.cwd(), 'subs');
+const ROOT = '/app/media';
 
 app.use(express.json());
 app.use(express.static('public'));
