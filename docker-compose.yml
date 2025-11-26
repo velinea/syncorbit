@@ -1,0 +1,11 @@
+version: '3.9'
+
+services:
+  syncorbit:
+    build: .
+    container_name: syncorbit
+    ports:
+      - '5010:5010'
+    volumes:
+      - /mnt/user/Media/Movies:/app/media
+    restart: unless-stopped
