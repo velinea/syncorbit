@@ -1,0 +1,40 @@
+# ===============================
+# Whisper.cpp CPU Builder
+# ===============================
+FROM ubuntu:22.04 AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake git wget \
+    libsndfile1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Clone whisper.cpp
+RUN git clone --depth=1 https://github.com/ggerganov/whisper.cpp.git whisper
+
+WORKDIR /app/whisper
+RUN mkdir build && cd build && cmake .. && make -j$(nproc)
+
+# Download multilingual SMALL model (48 MB)
+RUN wget -q https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin -O ggml-small.bin
+
+# ===============================
+# Whisper Runtime
+# ===============================
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binaries + model from builder
+COPY --from=builder /app/whisper/build/bin /usr/local/bin
+COPY --from=builder /app/whisper/ggml-small.bin /app/ggml-small.bin
+
+ENV WHISPER_MODEL=/app/ggml-small.bin
+ENV WHISPER_BINARY=/usr/local/bin/whisper-whisper-main
+
+ENTRYPOINT ["/usr/local/bin/whisper-whisper-main"]

@@ -1,11 +1,24 @@
-version: '3.9'
+version: '3.8'
 
 services:
   syncorbit:
-    build: .
+    image: ghcr.io/YOURNAME/syncorbit:latest
     container_name: syncorbit
+    restart: unless-stopped
     ports:
       - '5010:5010'
+    environment:
+      WHISPER_HOST: whisper
+      WHISPER_MODEL: /app/ggml-small.bin
+      MEDIA_ROOT: /app/media
     volumes:
-      - /mnt/user/Media/Movies:/app/media
+      - /mnt/user/media/movies:/app/media
+    depends_on:
+      - whisper
+
+  whisper:
+    image: ghcr.io/YOURNAME/syncorbit-whisper:latest
+    container_name: syncorbit-whisper
     restart: unless-stopped
+    volumes:
+      - /mnt/user/media/movies:/app/media:ro

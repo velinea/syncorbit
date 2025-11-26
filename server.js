@@ -285,19 +285,17 @@ app.post('/api/extract-audio', (req, res) => {
   });
 });
 
-app.post('/api/whisper', (req, res) => {
-  const { audio } = req.body;
+app.post('/api/whisper', async (req, res) => {
+  const { audioPath } = req.body;
+  if (!audioPath) return res.status(400).json({ error: 'audioPath required' });
 
-  const py = spawn('python3', ['python/run_whisper.py', audio]);
-  let out = '';
-  py.stdout.on('data', d => (out += d.toString()));
+  const whisperHost = process.env.WHISPER_HOST || 'whisper';
 
-  py.on('close', () => {
-    try {
-      res.json(JSON.parse(out));
-    } catch (e) {
-      res.json({ error: 'whisper_failed', raw: out });
-    }
+  const cmd = `docker exec syncorbit-whisper whisper-whisper-main -m /app/ggml-small.bin -f "${audioPath}" -osrt`;
+
+  exec(cmd, (err, stdout, stderr) => {
+    if (err) return res.status(500).json({ stderr });
+    res.json({ stdout });
   });
 });
 
