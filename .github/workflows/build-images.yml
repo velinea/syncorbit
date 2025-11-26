@@ -70,6 +70,8 @@ jobs:
       - name: Build & Push whisper.cpp image
         uses: docker/build-push-action@v5
         with:
+          build-args: |
+            GH_TOKEN=${{ secrets.GITHUB_TOKEN }}
           file: ./Dockerfile.whisper
           context: .
           platforms: linux/amd64,linux/arm64

@@ -10,6 +10,9 @@ WORKDIR /app
 
 # Install Python deps
 COPY python/requirements.txt python/requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip ffmpeg build-essential g++ \
+    && rm -rf /var/lib/apt/lists/*
 RUN pip3 install --no-cache-dir -r python/requirements.txt
 
 # Install Node deps
