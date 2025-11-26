@@ -121,7 +121,6 @@ def detect_piecewise_segments(offsets, max_segments=6):
 
     # Minimum anchors per segment
     min_seg_points = max(5, len(pts) // 10)
-
     segments_idx = []
     start_idx = 0
     for i in range(1, len(pts)):
@@ -157,9 +156,7 @@ def detect_piecewise_segments(offsets, max_segments=6):
 
     # Basic sanity: limit segment count, require each is not too noisy
     segments = segments[:max_segments]
-    good = [s for s in segments if s["mad"] < 0.6 and s["count"] >= min_seg_points]
-    if len(good) < 2:
-        return []
+    good = [s for s in segments if s["mad"] < 0.8]
 
     return good
 

@@ -58,8 +58,8 @@ def append_summary_line(csv_path: Path, folder_name: str, data: dict):
     exists = csv_path.exists()
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        if not exists:
-            w.writerow(["movie", "anchors", "avg_offset", "drift_span", "decision"])
+        # if not exists:
+        #     w.writerow(["movie", "anchors", "avg_offset", "drift_span", "decision"])
         w.writerow(
             [
                 folder_name,
