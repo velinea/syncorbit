@@ -47,7 +47,7 @@ FROM base AS runtime
 WORKDIR /app
 
 # Copy Whisper executable (THIS is the correct path)
-COPY --from=whisper /app/whisper/build/bin/whisper /usr/local/bin/whisper-main
+COPY --from=whisper /app/whisper/build/bin/main /usr/local/bin/whisper-main
 
 # Copy the model
 COPY --from=whisper /app/whisper/ggml-small.bin /app/whisper/ggml-small.bin

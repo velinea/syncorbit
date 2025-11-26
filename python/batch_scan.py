@@ -14,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = "/home/antti/syncorbit/subs"  # change as needed
+ROOT = "app/media"  # change as needed
 SYNCINFO_NAME = "analysis.syncinfo"
 SUMMARY_CSV = "syncorbit_library_summary.csv"
 
