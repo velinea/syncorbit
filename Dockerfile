@@ -18,15 +18,18 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Build whisper.cpp
 FROM python-base AS whisper
 WORKDIR /app/whisper
-RUN git clone --depth=1 https://github.com/ggerganov/whisper.cpp . \
-    && make -j4
+RUN git clone --depth=1 https://github.com/ggerganov/whisper.cpp .
+# Download multilingual model (recommended)
+RUN wget -q https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin \
+    -O ggml-small.bin
+RUN make -j4
 
 # Production/runtime
 FROM python-base AS runtime
 WORKDIR /app
 
 COPY --from=whisper /app/whisper/main /usr/local/bin/whisper-main
-COPY --from=whisper /app/whisper/ggml-base.en.bin /app/whisper/
+COPY --from=whisper /app/whisper/ggml-small.bin /app/whisper/
 
 COPY python/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt

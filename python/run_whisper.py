@@ -9,7 +9,7 @@ if len(sys.argv) < 2:
 
 audio = sys.argv[1]
 
-model = "/app/whisper/ggml-base.en.bin"
+model = "/app/whisper/ggml-small.bin"
 
 cmd = ["whisper-main", "-m", model, "-f", audio, "-osrt"]
 
