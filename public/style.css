@@ -78,6 +78,16 @@ h1 {
   display: block;
 }
 
+.button-secondary {
+  background: #1f2937;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+}
+
+.button-secondary:hover {
+  background: #374151;
+}
+
 #searchBox {
   width: 100%;
   padding: 10px;

@@ -119,6 +119,29 @@ app.get('/api/searchsubs', (req, res) => {
   });
 });
 
+app.post('/api/run-batch-scan', (req, res) => {
+  const py = spawn('python3', ['python/batch_scan.py'], {
+    cwd: '/app',
+  });
+
+  let out = '';
+  let err = '';
+
+  py.stdout.on('data', d => (out += d.toString()));
+  py.stderr.on('data', d => (err += d.toString()));
+
+  py.on('close', code => {
+    if (code === 0) {
+      res.json({ status: 'ok', output: out });
+    } else {
+      res.status(500).json({
+        status: 'error',
+        detail: err || `batch_scan exited with ${code}`,
+      });
+    }
+  });
+});
+
 app.get('/api/library', (req, res) => {
   const CSV = path.join(process.cwd(), 'python', 'syncorbit_library_summary.csv');
   function parseCSVLine(line) {

@@ -14,6 +14,7 @@
       <h1>Subtitle Alignment</h1>
       <!-- Top-level tabs -->
       <nav id="tabs">
+        <button id="runBatchScanBtn" class="button-secondary">Run Library Scan</button>
         <button data-tab="library" class="active">Library</button>
         <button data-tab="manual">Manual Align</button>
       </nav>
@@ -75,14 +76,8 @@
 (select a movie row to view its analysis.syncinfo)</pre
               >
 
-              <button id="autoCorrectBtn" disabled>
-                Auto-correct subtitles
-              </button>
-              <div
-                id="autoCorrectResult"
-                class="note"
-                style="margin-top: 6px"
-              ></div>
+              <button id="autoCorrectBtn" disabled>Auto-correct subtitles</button>
+              <div id="autoCorrectResult" class="note" style="margin-top: 6px"></div>
               <canvas id="libraryGraph"></canvas>
             </div>
           </div>

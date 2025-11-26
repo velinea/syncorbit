@@ -1,3 +1,4 @@
+rapidfuzz
 sentence-transformers
 torch
 numpy
