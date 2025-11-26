@@ -1,5 +1,4 @@
 rapidfuzz==3.6.1
 numpy
-scipy
 onnxruntime
 sentence-transformers
