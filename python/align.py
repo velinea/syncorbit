@@ -40,15 +40,7 @@ from typing import List, Tuple
 
 import numpy as np
 from rapidfuzz import fuzz
-from sentence_transformers import SentenceTransformer
-from sentence_transformers import util as st_util
-
-# Limit PyTorch threads for performance consistency
-import torch
-
-torch.set_num_threads(2)
-torch.set_num_interop_threads(2)
-
+from fastembed import TextEmbedding
 
 # ---------------- CONFIG TUNABLES ---------------- #
 
@@ -132,11 +124,6 @@ def load_srt(path: str) -> List[Cue]:
 # ---------- Similarity + alignment ----------
 
 
-def compute_embeddings(model, texts: List[str]) -> np.ndarray:
-    # Normalize embeddings to unit length (cosine similarity)
-    return model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
-
-
 def build_similarity_matrix(
     ref_cues: List[Cue],
     tgt_cues: List[Cue],
@@ -146,8 +133,9 @@ def build_similarity_matrix(
     """
     Hybrid similarity: cosine(embeddings) + fuzzy(token).
     """
-    # cosine similarity (SentenceTransformer)
-    emb_sim = st_util.cos_sim(ref_vecs, tgt_vecs).cpu().numpy()  # shape (N, M)
+    emb_sim = cosine_similarity_matrix(
+        np.array(ref_vecs, dtype=np.float32), np.array(tgt_vecs, dtype=np.float32)
+    )
 
     N, M = emb_sim.shape
     fuzz_sim = np.zeros_like(emb_sim, dtype=np.float32)
@@ -163,6 +151,22 @@ def build_similarity_matrix(
     sim = 0.7 * emb_sim + 0.3 * fuzz_sim
     sim = np.clip(sim, 0.0, 1.0)
     return sim
+
+
+def cosine_similarity_matrix(A, B):
+    """
+    Compute full cosine similarity matrix between two sets of embeddings.
+    A: (N, D)
+    B: (M, D)
+    Returns (N, M) matrix
+    """
+
+    # Normalize each row vector
+    A_norm = A / np.linalg.norm(A, axis=1, keepdims=True)
+    B_norm = B / np.linalg.norm(B, axis=1, keepdims=True)
+
+    # Cosine similarity = dot(normalized vectors)
+    return A_norm @ B_norm.T
 
 
 def align_sequences(
@@ -443,13 +447,14 @@ def main():
 
     # Model choice: multilingual, good balance
     model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    model = SentenceTransformer(model_name)
+    embedder = TextEmbedding(model_name=model_name)
 
     ref_texts = [c.text for c in ref_cues]
     tgt_texts = [c.text for c in tgt_cues]
 
-    ref_vecs = compute_embeddings(model, ref_texts)
-    tgt_vecs = compute_embeddings(model, tgt_texts)
+    # FastEmbed returns an iterator of numpy arrays
+    ref_vecs = list(embedder.embed(ref_texts))
+    tgt_vecs = list(embedder.embed(tgt_texts))
 
     sim = build_similarity_matrix(ref_cues, tgt_cues, ref_vecs, tgt_vecs)
     aligned = align_sequences(sim)
