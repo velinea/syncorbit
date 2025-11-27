@@ -70,13 +70,13 @@ COPY . .
 COPY --from=whisper-build /app/whisper/build/bin/whisper-cli /usr/local/bin/whisper-cli
 
 # Whisper shared libraries
-COPY --from=whisper-build /app/whisper/build/lib/ /usr/local/lib/
+COPY --from=whisper-build /app/whisper/build/*.so /usr/local/lib/
 
 # Whisper model
 COPY --from=whisper-build /app/whisper/ggml-small.bin /app/whisper-model.bin
 
 # Ensure runtime loader can find whisper libs
-ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/lib"
 
 ENV WHISPER_MODEL=/app/whisper-model.bin
 
