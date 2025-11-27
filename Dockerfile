@@ -66,9 +66,17 @@ RUN npm install --omit=dev
 # App source
 COPY . .
 
-# --- Whisper binary + model from build stage ---
+# Whisper binary
 COPY --from=whisper-build /app/whisper/build/bin/whisper-cli /usr/local/bin/whisper-cli
+
+# Whisper shared libraries
+COPY --from=whisper-build /app/whisper/build/lib/ /usr/local/lib/
+
+# Whisper model
 COPY --from=whisper-build /app/whisper/ggml-small.bin /app/whisper-model.bin
+
+# Ensure runtime loader can find whisper libs
+ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 ENV WHISPER_MODEL=/app/whisper-model.bin
 
