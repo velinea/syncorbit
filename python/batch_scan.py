@@ -16,9 +16,9 @@ from pathlib import Path
 
 ROOT = "/app/media"  # change as needed
 SYNCINFO_NAME = "analysis.syncinfo"
-SUMMARY_CSV = "syncorbit_library_summary.csv"
+SUMMARY_CSV = "python/syncorbit_library_summary.csv"
 
-ALIGN_PY = "align.py"
+ALIGN_PY = "python/align.py"
 
 
 def find_subtitles(folder: Path):

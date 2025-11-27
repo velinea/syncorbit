@@ -313,7 +313,7 @@ document.querySelectorAll('#libraryTable thead th[data-sort]').forEach(th => {
 });
 
 function shortTitle(t) {
-  return t.length > 20 ? t.slice(0, 17) + '…' : t;
+  return t.length > 25 ? t.slice(0, 17) + '…' : t;
 }
 
 function shortStatus(s) {

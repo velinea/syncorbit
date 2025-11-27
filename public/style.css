@@ -200,7 +200,7 @@ button:disabled {
 
 #libraryArea {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 700px;
+  grid-template-columns: 600px auto;
   gap: 6px;
   margin-top: 14px;
 }
