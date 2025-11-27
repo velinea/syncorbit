@@ -70,7 +70,10 @@ COPY . .
 COPY --from=whisper-build /app/whisper/build/bin/whisper-cli /usr/local/bin/whisper-cli
 
 # Whisper shared libraries
-COPY --from=whisper-build /app/whisper/build/lib* /usr/local/lib/
+# Copy *all* .so files from the entire whisper build tree
+COPY --from=whisper-build /app/whisper/build /usr/local/lib-build
+RUN find /usr/local/lib-build -maxdepth 4 -type f -name "*.so" -exec cp {} /usr/local/lib/ \; \
+    && rm -rf /usr/local/lib-build
 
 # Whisper model
 COPY --from=whisper-build /app/whisper/ggml-small.bin /app/whisper-model.bin
