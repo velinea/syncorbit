@@ -143,7 +143,9 @@ app.post('/api/run-batch-scan', (req, res) => {
 });
 
 app.get('/api/library', (req, res) => {
-  const CSV = path.join(process.cwd(), 'python', 'syncorbit_library_summary.csv');
+  const dataDir = process.env.SYNCORBIT_DATA || '/app/data';
+  const CSV = path.join(dataDir, 'syncorbit_library_summary.csv');
+
   function parseCSVLine(line) {
     const result = [];
     let current = '';

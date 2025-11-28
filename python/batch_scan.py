@@ -16,7 +16,9 @@ from pathlib import Path
 
 ROOT = "/app/media"  # change as needed
 SYNCINFO_NAME = "analysis.syncinfo"
-SUMMARY_CSV = "python/syncorbit_library_summary.csv"
+DATA_DIR = os.environ.get("SYNCORBIT_DATA", "/app/data")
+SUMMARY_CSV = os.path.join(DATA_DIR, "syncorbit_library_summary.csv")
+
 
 ALIGN_PY = "python/align.py"
 
@@ -83,8 +85,19 @@ def main():
 
         syncinfo = folder / SYNCINFO_NAME
         if syncinfo.exists():
-            print(f"→ Skipping (already processed): {folder.name}")
-            continue
+            # Reuse existing analysis.syncinfo
+            print(f"→ Using existing analysis: {folder.name}")
+            try:
+                with open(syncinfo, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                print(f"ERROR: Could not read {syncinfo}, re-running alignment.")
+                data = None
+
+            if data:
+                append_summary_line(summary_path, folder.name, data)
+                continue
+                # otherwise fall through and re-align
 
         subpair = find_subtitles(folder)
         if not subpair:

@@ -72,17 +72,20 @@ RUN npm install --omit=dev
 #########################
 COPY . .
 
+RUN mkdir -p /app/data
+
 ###########################################
-# Copy whisper-cli + *ALL .so libraries*
+# Copy whisper-cli + shared libraries
 ###########################################
+
+# Executable
 COPY --from=whisper-build /app/whisper/build/bin/whisper-cli /usr/local/bin/whisper-cli
 
-# Copy ANY .so file built anywhere in whisper/build
-COPY --from=whisper-build /app/whisper/build /usr/local/lib-whisper
+# Shared libs (exact structure from real build)
+COPY --from=whisper-build /app/whisper/build/src/libwhisper.so* /usr/local/lib/
+COPY --from=whisper-build /app/whisper/build/ggml/src/libggml*.so* /usr/local/lib/
 
-RUN find /usr/local/lib-whisper -type f -name "*.so*" -exec cp {} /usr/local/lib/ \; \
-    && rm -rf /usr/local/lib-whisper
-
+# Runtime loader path
 ENV LD_LIBRARY_PATH="/usr/local/lib"
 
 ###########################################

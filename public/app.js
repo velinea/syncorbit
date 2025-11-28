@@ -359,7 +359,7 @@ function renderLibraryTable() {
 
   if (!libraryRows.length) {
     libraryTableBody.innerHTML =
-      "<tr><td colspan='5'>No rows loaded. Click “Reload summary”.</td></tr>";
+      "<tr><td colspan='5'>No rows loaded. Click “Load summary”.</td></tr>";
     return;
   }
 
