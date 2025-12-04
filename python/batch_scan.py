@@ -56,19 +56,22 @@ def write_syncinfo(folder: Path, data: dict):
         json.dump(data, f, indent=2)
 
 
-def append_summary_line(csv_path: Path, folder_name: str, data: dict):
-    exists = csv_path.exists()
+def write_summary_header(csv_path: Path):
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["movie", "anchors", "avg_offset", "drift_span", "decision"])
+
+
+def write_summary_line(csv_path: Path, folder_name: str, data: dict):
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        # if not exists:
-        #     w.writerow(["movie", "anchors", "avg_offset", "drift_span", "decision"])
         w.writerow(
             [
                 folder_name,
-                data["anchor_count"],
-                data["avg_offset_sec"],
-                data["drift_span_sec"],
-                data["decision"],
+                data.get("anchor_count", 0),
+                data.get("avg_offset_sec", 0.0),
+                data.get("drift_span_sec", 0.0),
+                data.get("decision", "unknown"),
             ]
         )
 
@@ -77,49 +80,49 @@ def main():
     root = Path(ROOT)
     summary_path = Path(SUMMARY_CSV)
 
-    print(f"Scanning library: {root}")
+    # Always rebuild CSV fresh
+    write_summary_header(summary_path)
 
     for folder in sorted(root.iterdir()):
         if not folder.is_dir():
             continue
 
+        folder_name = folder.name
         syncinfo = folder / SYNCINFO_NAME
+
         if syncinfo.exists():
-            # Reuse existing analysis.syncinfo
-            print(f"→ Using existing analysis: {folder.name}")
+            # reuse existing analysis
             try:
                 with open(syncinfo, "r", encoding="utf-8") as f:
                     data = json.load(f)
             except Exception:
-                print(f"ERROR: Could not read {syncinfo}, re-running alignment.")
+                print(f"→ ERROR reading {syncinfo}, re-aligning.")
                 data = None
+        else:
+            data = None
 
-            if data:
-                append_summary_line(summary_path, folder.name, data)
+        if not data:
+            # need fresh analysis
+            subpair = find_subtitles(folder)
+            if not subpair:
+                print(f"→ No subtitle pair in {folder_name}")
                 continue
-                # otherwise fall through and re-align
 
-        subpair = find_subtitles(folder)
-        if not subpair:
-            print(f"→ No subtitle pair: {folder.name}")
-            continue
+            ref, tgt = subpair
+            print(f"→ Aligning {ref.name} <-> {tgt.name}")
 
-        ref, tgt = subpair
-        print(f"Aligning {ref.name} <-> {tgt.name}")
+            try:
+                data = run_align(ref, tgt)
+            except Exception as e:
+                print(f"ERROR: {e}")
+                continue
 
-        try:
-            data = run_align(ref, tgt)
-        except Exception as e:
-            print("ERROR:", e)
-            continue
+            write_syncinfo(folder, data)
 
-        data["movie"] = folder.name
-        data["folder"] = str(folder)
+        # write CSV row
+        write_summary_line(summary_path, folder_name, data)
 
-        write_syncinfo(folder, data)
-        append_summary_line(summary_path, folder.name, data)
-
-        print(f"✔ Done: {folder.name} ({data['decision']})")
+        print(f"✔ {folder_name}: {data['decision']}")
 
     print("Batch scan complete.")
 
