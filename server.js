@@ -196,7 +196,9 @@ app.get('/api/library', (req, res) => {
         const decisionRaw = (parts[4] || 'unknown').trim().toLowerCase();
 
         const analysisDir = path.join(dataDir, 'analysis');
-        const syncinfoCandidate = path.join(analysisDir, `${movie}.syncinfo`);
+        const syncinfoCandidate = path.join(analysisDir, movie, 'analysis.syncinfo');
+        // Whisper reference indicator
+        const whisperRef = path.join(dataDir, 'ref', movie, 'ref.srt');
 
         return {
           movie,
@@ -205,6 +207,7 @@ app.get('/api/library', (req, res) => {
           drift_span: driftSpan,
           decision: decisionRaw,
           syncinfo_path: fs.existsSync(syncinfoCandidate) ? syncinfoCandidate : null,
+          whisper_ref: fs.existsSync(whisperRef),
         };
       })
       .filter(Boolean);

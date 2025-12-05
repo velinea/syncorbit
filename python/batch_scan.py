@@ -52,13 +52,16 @@ def run_align(ref: Path, tgt: Path):
     return json.loads(out.stdout)
 
 
-def write_syncinfo(analysis_dir: Path, folder_name: str, data: dict):
+def write_syncinfo(analysis_root: Path, movie_name: str, data: dict):
     """
-    Write <movie>.syncinfo into SYNCORBIT_DATA/analysis.
+    Store analysis under:
+        /app/data/analysis/<movie>/analysis.syncinfo
     """
-    analysis_dir.mkdir(parents=True, exist_ok=True)
-    path = analysis_dir / f"{folder_name}.syncinfo"
-    with open(path, "w", encoding="utf-8") as f:
+    movie_dir = analysis_root / movie_name
+    movie_dir.mkdir(parents=True, exist_ok=True)
+
+    outpath = movie_dir / "analysis.syncinfo"
+    with open(outpath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
@@ -96,7 +99,32 @@ def main():
             continue
 
         folder_name = folder.name
-        syncinfo_path = analysis_dir / f"{folder_name}.syncinfo"
+        syncinfo_path = analysis_dir / folder_name / "analysis.syncinfo"
+        # Prefer Whisper reference if present:
+        ref_dir = Path(DATA_DIR) / "ref" / folder_name
+        whisper_ref = ref_dir / "ref.srt"
+
+        if whisper_ref.exists():
+            # Whisper reference is authoritative; use it as reference
+            ref_sub = whisper_ref
+            # Still look for target subtitles inside media folder
+            tgt_candidates = list(folder.glob("*.srt"))
+            # Pick the best FI subtitle
+            tgt_sub = None
+            for s in tgt_candidates:
+                name = s.stem.lower()
+                if name.endswith(("fi", "fin")):
+                    tgt_sub = s
+                    break
+
+            if tgt_sub:
+                print(f"→ Using Whisper reference for {folder_name}")
+                subpair = (ref_sub, tgt_sub)
+            else:
+                print(f"→ Whisper found but no FI target: {folder_name}")
+                subpair = None
+        else:
+            subpair = find_subtitles(folder)
 
         data = None
         if syncinfo_path.exists():

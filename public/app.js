@@ -411,6 +411,7 @@ function renderLibraryTable() {
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
       <td class="${statusClass}">${shortStatus(r.decision)}</td>
+      <td>${r.whisper_ref ? '&#128077;' : '-'}</td>
     `;
 
     tr.addEventListener('click', () => {
