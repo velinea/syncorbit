@@ -410,11 +410,11 @@ function renderLibraryTable() {
       : '';
 
     tr.innerHTML = `
-      <td>${shortTitle} ${whisperBadge}</td>
+      <td>${shortTitle(r.movie)} ${whisperBadge}</td>
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
-      <td class="${statusClass}">${shortStatus}</td>
+      <td class="${statusClass}">${shortStatus(r.decision)}</td>
     `;
 
     tr.addEventListener('click', () => {

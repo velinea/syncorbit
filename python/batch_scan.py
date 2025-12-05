@@ -135,19 +135,20 @@ def main():
         # path: /app/data/ref/<movie>/ref.srt
         whisper_ref_path = REF_ROOT / movie / "ref.srt"
 
-        # ---------------------------------------------
-        # If analysis exists, reuse it (no re-aligning)
-        # ---------------------------------------------
-        if syncinfo_path.exists():
-            try:
-                with open(syncinfo_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                print(f"→ Reusing existing analysis: {movie}")
-                append_summary(SUMMARY_CSV, movie, data)
-                continue
-            except Exception as e:
-                print(f"→ ERROR reading {syncinfo_path}: {e}")
-                print(f"→ Will try to re-align {movie}")
+        force_reanalyze = False
+
+        if whisper_ref_path.exists():
+            # If Whisper reference exists but no syncinfo OR
+            # syncinfo is older than Whisper ref -> re-run
+            if (not syncinfo.exists()) or (
+                whisper_ref.stat().st_mtime > syncinfo.stat().st_mtime
+            ):
+                force_reanalyze = True
+
+        # If no Whisper reference, fall back to normal behavior
+        if syncinfo.exists() and not force_reanalyze:
+            print(f"→ Skipping (already processed): {folder.name}")
+            continue
 
         # ---------------------------------------------
         # 1. Prefer Whisper reference if available
