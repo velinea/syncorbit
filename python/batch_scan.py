@@ -140,14 +140,14 @@ def main():
         if whisper_ref_path.exists():
             # If Whisper reference exists but no syncinfo OR
             # syncinfo is older than Whisper ref -> re-run
-            if (not syncinfo.exists()) or (
-                whisper_ref.stat().st_mtime > syncinfo.stat().st_mtime
+            if (not syncinfo_path.exists()) or (
+                whisper_ref_path.stat().st_mtime > syncinfo_path.stat().st_mtime
             ):
                 force_reanalyze = True
 
         # If no Whisper reference, fall back to normal behavior
-        if syncinfo.exists() and not force_reanalyze:
-            print(f"→ Skipping (already processed): {folder.name}")
+        if syncinfo_path.exists() and not force_reanalyze:
+            print(f"→ Skipping (already processed): {movie}")
             continue
 
         # ---------------------------------------------
