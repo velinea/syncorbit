@@ -273,32 +273,4 @@ function findVideoFile(folder) {
   return video ? path.join(folder, video) : null;
 }
 
-app.post('/api/extract-audio', (req, res) => {
-  const { moviePath } = req.body;
-  const video = findVideoFile(moviePath);
-  if (!video) return res.status(400).json({ error: 'no_video' });
-
-  const audioOut = path.join(moviePath, 'audio.wav');
-
-  const cmd = `ffmpeg -y -i "${video}" -vn -ac 1 -ar 16000 "${audioOut}"`;
-  exec(cmd, err => {
-    if (err) return res.json({ error: 'ffmpeg_error', detail: err.toString() });
-    res.json({ status: 'ok', audio: audioOut });
-  });
-});
-
-app.post('/api/whisper', async (req, res) => {
-  const { audioPath } = req.body;
-  if (!audioPath) return res.status(400).json({ error: 'audioPath required' });
-
-  const whisperHost = process.env.WHISPER_HOST || 'whisper';
-
-  const cmd = `docker exec syncorbit-whisper whisper-whisper-main -m /app/ggml-small.bin -f "${audioPath}" -osrt`;
-
-  exec(cmd, (err, stdout, stderr) => {
-    if (err) return res.status(500).json({ stderr });
-    res.json({ stdout });
-  });
-});
-
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'));

@@ -1,24 +1,14 @@
-version: '3.8'
 
 services:
   syncorbit:
-    image: ghcr.io/YOURNAME/syncorbit:latest
+    build: .
     container_name: syncorbit
-    restart: unless-stopped
     ports:
       - '5010:5010'
+    volumes:
+      - ./python:/app/python:rw # OPTIONAL in dev mode
+      - /mnt/media/Media/Movies:/app/media:ro # your Unraid media
+      - ./data:/app/data # persistent storage
     environment:
-      WHISPER_HOST: whisper
-      WHISPER_MODEL: /app/ggml-small.bin
-      MEDIA_ROOT: /app/media
-    volumes:
-      - /mnt/user/media/movies:/app/media
-    depends_on:
-      - whisper
-
-  whisper:
-    image: ghcr.io/YOURNAME/syncorbit-whisper:latest
-    container_name: syncorbit-whisper
+      - SYNCORBIT_DATA=/app/data
     restart: unless-stopped
-    volumes:
-      - /mnt/user/media/movies:/app/media:ro
