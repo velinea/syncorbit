@@ -306,3 +306,13 @@ button:disabled {
 #autoCorrectBtn:hover {
   background: #16a34a;
 }
+.whisper-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}

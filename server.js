@@ -144,7 +144,14 @@ app.post('/api/run-batch-scan', (req, res) => {
 
 app.get('/api/library', (req, res) => {
   const dataDir = process.env.SYNCORBIT_DATA || '/app/data';
-  const CSV = path.join(dataDir, 'syncorbit_library_summary.csv');
+  const csvPath = path.join(dataDir, 'syncorbit_library_summary.csv');
+
+  if (!fs.existsSync(csvPath)) {
+    return res.json({ error: 'no_summary_file' });
+  }
+
+  const analysisDir = path.join(dataDir, 'analysis');
+  const refDir = path.join(dataDir, 'ref');
 
   function parseCSVLine(line) {
     const result = [];
@@ -153,61 +160,47 @@ app.get('/api/library', (req, res) => {
 
     for (let i = 0; i < line.length; i++) {
       const c = line[i];
-
       if (c === '"') {
         insideQuotes = !insideQuotes;
         continue;
       }
-
       if (c === ',' && !insideQuotes) {
         result.push(current);
         current = '';
         continue;
       }
-
       current += c;
     }
-
     result.push(current);
     return result;
   }
 
-  if (!fs.existsSync(CSV)) {
-    return res.json({ error: 'no_summary_file' });
-  }
-
   try {
-    const raw = fs.readFileSync(CSV, 'utf8').trim().split('\n').filter(Boolean);
+    const raw = fs.readFileSync(csvPath, 'utf8').trim().split('\n').filter(Boolean);
 
     const rows = raw
       .map(line => {
         const parts = parseCSVLine(line);
-        const rawMovie = (parts[0] || '').trim();
-        const movie = rawMovie.replace(/^"|"$/g, '').trim();
+        const movie = (parts[0] || '').replace(/^"|"$/g, '').trim();
+        if (!movie || movie.toLowerCase() === 'movie') return null;
 
-        // Skip header-like rows if present
-        if (!movie || movie.toLowerCase() === 'movie') {
-          return null;
-        }
+        const anchor_count = Number(parts[1]);
+        const avg_offset = Number(parts[2]);
+        const drift_span = Number(parts[3]);
+        const decision = (parts[4] || 'unknown').trim().toLowerCase();
 
-        const anchorCount = Number(parts[1]);
-        const avgOffset = Number(parts[2]);
-        const driftSpan = Number(parts[3]);
-        const decisionRaw = (parts[4] || 'unknown').trim().toLowerCase();
-
-        const analysisDir = path.join(dataDir, 'analysis');
-        const syncinfoCandidate = path.join(analysisDir, movie, 'analysis.syncinfo');
-        // Whisper reference indicator
-        const whisperRef = path.join(dataDir, 'ref', movie, 'ref.srt');
+        const syncinfoPath = path.join(analysisDir, movie, 'analysis.syncinfo');
+        const whisperRefPath = path.join(refDir, movie, 'ref.srt');
 
         return {
           movie,
-          anchor_count: anchorCount,
-          avg_offset: avgOffset,
-          drift_span: driftSpan,
-          decision: decisionRaw,
-          syncinfo_path: fs.existsSync(syncinfoCandidate) ? syncinfoCandidate : null,
-          whisper_ref: fs.existsSync(whisperRef),
+          anchor_count,
+          avg_offset,
+          drift_span,
+          decision,
+          syncinfo_path: fs.existsSync(syncinfoPath) ? syncinfoPath : null,
+          whisper_ref: fs.existsSync(whisperRefPath),
+          whisper_ref_path: fs.existsSync(whisperRefPath) ? whisperRefPath : null,
         };
       })
       .filter(Boolean);
@@ -215,6 +208,23 @@ app.get('/api/library', (req, res) => {
     res.json(rows);
   } catch (e) {
     res.status(500).json({ error: 'csv_read_failed', detail: String(e) });
+  }
+});
+
+app.get('/api/analysis/:movie', (req, res) => {
+  const movie = req.params.movie;
+  const dataDir = process.env.SYNCORBIT_DATA || '/app/data';
+  const syncinfoPath = path.join(dataDir, 'analysis', movie, 'analysis.syncinfo');
+
+  if (!fs.existsSync(syncinfoPath)) {
+    return res.status(404).json({ error: 'syncinfo_not_found', movie });
+  }
+
+  try {
+    const json = fs.readFileSync(syncinfoPath, 'utf8');
+    res.json(JSON.parse(json));
+  } catch (e) {
+    res.status(500).json({ error: 'bad_json', detail: String(e) });
   }
 });
 

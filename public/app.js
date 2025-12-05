@@ -405,13 +405,16 @@ function renderLibraryTable() {
         ? 'status-adjust'
         : 'status-bad';
 
+    const whisperBadge = r.whisper_ref
+      ? `<span class="whisper-tag">Whisper</span>`
+      : '';
+
     tr.innerHTML = `
-      <td>${shortTitle(r.movie)}</td>
-      <td>${r.anchor_count}</td>
+      <td>${r.movie} ${whisperBadge}</td>
+      <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
-      <td class="${statusClass}">${shortStatus(r.decision)}</td>
-      <td>${r.whisper_ref ? '&#128077;' : '-'}</td>
+      <td class="${statusClass}">${r.decision}</td>
     `;
 
     tr.addEventListener('click', () => {
@@ -423,22 +426,32 @@ function renderLibraryTable() {
 }
 
 async function openLibraryAnalysis(row) {
-  if (!row.syncinfo_path) {
-    librarySummaryPre.textContent = 'No analysis.syncinfo found for this movie folder.';
-    clearLibraryGraph();
-    currentLibraryRow = null;
-    currentLibraryAnalysis = null;
-    if (autoCorrectBtn) {
-      autoCorrectBtn.disabled = true;
-      autoCorrectResult.textContent = '';
-    }
-    return;
-  }
-
+  // Reset UI state
   librarySummaryPre.textContent = 'Loading analysis…';
+  clearLibraryGraph();
   autoCorrectResult.textContent = '';
   if (autoCorrectBtn) autoCorrectBtn.disabled = true;
 
+  // ----------------------------------------------------------
+  // CASE 1: No syncinfo_path — this can mean Whisper ref exists
+  //         but analysis has not been generated yet.
+  // ----------------------------------------------------------
+  if (!row.syncinfo_path) {
+    if (row.whisper_ref) {
+      librarySummaryPre.textContent =
+        'Whisper reference exists, but no analysis yet.\nRun batch scan to generate analysis.';
+    } else {
+      librarySummaryPre.textContent = 'No analysis.syncinfo found for this movie.';
+    }
+
+    currentLibraryRow = null;
+    currentLibraryAnalysis = null;
+    return;
+  }
+
+  // ----------------------------------------------------------
+  // CASE 2: syncinfo exists — fetch analysis
+  // ----------------------------------------------------------
   try {
     const res = await fetch(
       `/api/movieinfo?file=${encodeURIComponent(row.syncinfo_path)}`
@@ -446,7 +459,7 @@ async function openLibraryAnalysis(row) {
     const data = await res.json();
 
     if (data.error) {
-      librarySummaryPre.textContent = 'Error: ' + data.error;
+      librarySummaryPre.textContent = `Error: ${data.error}`;
       clearLibraryGraph();
       currentLibraryRow = null;
       currentLibraryAnalysis = null;
@@ -454,22 +467,34 @@ async function openLibraryAnalysis(row) {
       return;
     }
 
-    // Remember for autocorrect
+    // Store for autocorrect
     currentLibraryRow = row;
     currentLibraryAnalysis = data;
 
+    // Render summary + graph
     renderSummary(data, librarySummaryPre);
-
     drawGraph(libraryCanvas, data.clean_offsets || data.offsets || []);
-    // We can auto-correct only if we know target_path
-    if (autoCorrectBtn && data.target_path) {
+
+    // ----------------------------------------------------------
+    // Autocorrect logic
+    // - Only enabled if analysis includes target_path
+    // - Whisper references have no target_path → disable
+    // ----------------------------------------------------------
+    if (row.whisper_ref) {
+      autoCorrectBtn.disabled = true;
+      autoCorrectResult.textContent =
+        'Auto-correct not available for Whisper reference (no original target subtitle).';
+    } else if (autoCorrectBtn && data.target_path) {
       autoCorrectBtn.disabled = false;
       autoCorrectResult.textContent =
         'Ready for auto-correction using current analysis.';
+    } else {
+      autoCorrectBtn.disabled = true;
+      autoCorrectResult.textContent = '';
     }
-  } catch (e) {
-    console.error('movieinfo error', e);
-    librarySummaryPre.textContent = 'Failed to load analysis: ' + e.message;
+  } catch (err) {
+    console.error('movieinfo error', err);
+    librarySummaryPre.textContent = 'Failed to load analysis: ' + err.message;
     clearLibraryGraph();
     currentLibraryRow = null;
     currentLibraryAnalysis = null;
