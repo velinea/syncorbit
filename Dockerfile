@@ -1,67 +1,53 @@
-###############################################
-# 1. Base — Python + Node minimal
-###############################################
-FROM python:3.11-slim AS base
+# ============================
+# Stage 1 — Install Node deps
+# ============================
+FROM node:20-slim AS build
 
-# Avoid Python writing .pyc
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Create app directory
 WORKDIR /app
 
-# System dependencies (very lightweight)
+# Install only prod dependencies for node
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# Build frontend if you have one (optional)
+# COPY . .
+# RUN npm run build
+
+# ============================
+# Stage 2 — Final Runtime
+# ============================
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install minimal Python runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nodejs npm ffmpeg git \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+        python3 python3-pip python3-venv python3-setuptools vim \
+    && rm -rf /var/lib/apt/lists/*
 
+# Create small virtual env for python tools
+RUN python3 -m venv /app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
 
-###############################################
-# 2. Install Python dependencies
-###############################################
-COPY python/requirements.txt /app/python/requirements.txt
+# Copy Python alignment scripts
+COPY python/ /app/python/
 
-# requirements.txt MUST be torch-free:
-# Example:
-#   fastembed
-#   rapidfuzz
-#   numpy
-#   scipy
-#   scikit-learn
-#   python-dotenv
-#   flask (if needed by python server)
-#
-# No torch, no transformers, no whisper.
-
+# Install only required Python packages
+COPY python/requirements.txt /app/python/
 RUN pip install --no-cache-dir -r /app/python/requirements.txt
 
+# Copy Node runtime
+COPY --from=build /app/node_modules /app/node_modules
+COPY . .
 
-###############################################
-# 3. Install Node dependencies
-###############################################
-COPY package.json package-lock.json /app/
-
-RUN npm install --omit=dev
-
-
-###############################################
-# 4. Copy Application Files
-###############################################
-COPY server.js /app/server.js
-COPY public /app/public
-COPY python /app/python
-
-###############################################
-# 5. Create required folders
-###############################################
-RUN mkdir -p /app/media /app/data
-
-###############################################
-# 6. Expose server
-###############################################
+# Expose runtime port
 EXPOSE 5010
 
-###############################################
-# 7. Start SyncOrbit server
-###############################################
+# Create persistent storage for:
+#   - syncorbit_library_summary.csv
+#   - *.syncinfo
+VOLUME ["/app/data"]
+
+ENV SYNCORBIT_DATA="/app/data"
+
 CMD ["node", "server.js"]
