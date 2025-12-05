@@ -3,31 +3,32 @@
 Batch scanner for SyncOrbit.
 
 Walks a movie library and generates:
-    - analysis.syncinfo per movie
-    - syncorbit_library_summary.csv
+    - <movie>.syncinfo under SYNCORBIT_DATA/analysis
+    - syncorbit_library_summary.csv under SYNCORBIT_DATA
 """
 
 import csv
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
-ROOT = "/app/media"  # change as needed
-SYNCINFO_NAME = "analysis.syncinfo"
+ROOT = "/app/media"  # mounted media root
 DATA_DIR = os.environ.get("SYNCORBIT_DATA", "/app/data")
-SUMMARY_CSV = os.path.join(DATA_DIR, "syncorbit_library_summary.csv")
-
+ANALYSIS_DIR = Path(DATA_DIR) / "analysis"
+SUMMARY_CSV = Path(DATA_DIR) / "syncorbit_library_summary.csv"
 
 ALIGN_PY = "python/align.py"
 
 
 def find_subtitles(folder: Path):
+    """
+    Very simple heuristic: look for EN/FI pairs.
+    """
     subs = [f for f in folder.glob("*.srt")]
     if len(subs) < 2:
         return None
-    # heuristic: en = longer common base names ending with en.srt or eng.srt
+
     ref = None
     tgt = None
     for s in subs:
@@ -36,6 +37,7 @@ def find_subtitles(folder: Path):
             ref = s
         if name.endswith(("fi", "fin")):
             tgt = s
+
     if ref and tgt:
         return ref, tgt
     return None
@@ -50,19 +52,21 @@ def run_align(ref: Path, tgt: Path):
     return json.loads(out.stdout)
 
 
-def write_syncinfo(folder: Path, data: dict):
-    path = folder / SYNCINFO_NAME
+def write_syncinfo(analysis_dir: Path, folder_name: str, data: dict):
+    """
+    Write <movie>.syncinfo into SYNCORBIT_DATA/analysis.
+    """
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+    path = analysis_dir / f"{folder_name}.syncinfo"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
-def write_summary_header(csv_path: Path):
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["movie", "anchors", "avg_offset", "drift_span", "decision"])
-
-
 def write_summary_line(csv_path: Path, folder_name: str, data: dict):
+    """
+    Append one row to summary CSV (no header).
+    """
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(
@@ -78,31 +82,34 @@ def write_summary_line(csv_path: Path, folder_name: str, data: dict):
 
 def main():
     root = Path(ROOT)
-    summary_path = Path(SUMMARY_CSV)
+    analysis_dir = ANALYSIS_DIR
+    summary_path = SUMMARY_CSV
 
-    # Always rebuild CSV fresh
-    write_summary_header(summary_path)
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+
+    # Always rebuild CSV fresh (no header)
+    if summary_path.exists():
+        summary_path.unlink()
 
     for folder in sorted(root.iterdir()):
         if not folder.is_dir():
             continue
 
         folder_name = folder.name
-        syncinfo = folder / SYNCINFO_NAME
+        syncinfo_path = analysis_dir / f"{folder_name}.syncinfo"
 
-        if syncinfo.exists():
-            # reuse existing analysis
+        data = None
+        if syncinfo_path.exists():
+            # reuse existing analysis from /app/data/analysis
             try:
-                with open(syncinfo, "r", encoding="utf-8") as f:
+                with open(syncinfo_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                print(f"→ Reusing existing analysis: {folder_name}")
             except Exception:
-                print(f"→ ERROR reading {syncinfo}, re-aligning.")
+                print(f"→ ERROR reading {syncinfo_path}, re-aligning.")
                 data = None
-        else:
-            data = None
 
         if not data:
-            # need fresh analysis
             subpair = find_subtitles(folder)
             if not subpair:
                 print(f"→ No subtitle pair in {folder_name}")
@@ -117,12 +124,11 @@ def main():
                 print(f"ERROR: {e}")
                 continue
 
-            write_syncinfo(folder, data)
+            write_syncinfo(analysis_dir, folder_name, data)
 
         # write CSV row
         write_summary_line(summary_path, folder_name, data)
-
-        print(f"✔ {folder_name}: {data['decision']}")
+        print(f"✔ {folder_name}: {data.get('decision', 'unknown')}")
 
     print("Batch scan complete.")
 

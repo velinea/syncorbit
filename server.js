@@ -179,20 +179,35 @@ app.get('/api/library', (req, res) => {
   try {
     const raw = fs.readFileSync(CSV, 'utf8').trim().split('\n').filter(Boolean);
 
-    const rows = raw.map(line => {
-      const parts = parseCSVLine(line);
-      const movie = parts[0].replace(/^"|"$/g, '');
-      return {
-        movie: parts[0].trim(),
-        anchor_count: Number(parts[1]),
-        avg_offset: Number(parts[2]),
-        drift_span: Number(parts[3]),
-        decision: (parts[4] || 'unknown').trim().toLowerCase(),
-        syncinfo_path: fs.existsSync(path.join(ROOT, parts[0], 'analysis.syncinfo'))
-          ? path.join(ROOT, parts[0], 'analysis.syncinfo')
-          : null,
-      };
-    });
+    const rows = raw
+      .map(line => {
+        const parts = parseCSVLine(line);
+        const rawMovie = (parts[0] || '').trim();
+        const movie = rawMovie.replace(/^"|"$/g, '').trim();
+
+        // Skip header-like rows if present
+        if (!movie || movie.toLowerCase() === 'movie') {
+          return null;
+        }
+
+        const anchorCount = Number(parts[1]);
+        const avgOffset = Number(parts[2]);
+        const driftSpan = Number(parts[3]);
+        const decisionRaw = (parts[4] || 'unknown').trim().toLowerCase();
+
+        const analysisDir = path.join(dataDir, 'analysis');
+        const syncinfoCandidate = path.join(analysisDir, `${movie}.syncinfo`);
+
+        return {
+          movie,
+          anchor_count: anchorCount,
+          avg_offset: avgOffset,
+          drift_span: driftSpan,
+          decision: decisionRaw,
+          syncinfo_path: fs.existsSync(syncinfoCandidate) ? syncinfoCandidate : null,
+        };
+      })
+      .filter(Boolean);
 
     res.json(rows);
   } catch (e) {
