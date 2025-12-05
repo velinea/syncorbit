@@ -410,11 +410,11 @@ function renderLibraryTable() {
       : '';
 
     tr.innerHTML = `
-      <td>${r.movie} ${whisperBadge}</td>
+      <td>${shortTitle} ${whisperBadge}</td>
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
-      <td class="${statusClass}">${r.decision}</td>
+      <td class="${statusClass}">${shortStatus}</td>
     `;
 
     tr.addEventListener('click', () => {
@@ -476,21 +476,16 @@ async function openLibraryAnalysis(row) {
     drawGraph(libraryCanvas, data.clean_offsets || data.offsets || []);
 
     // ----------------------------------------------------------
-    // Autocorrect logic
-    // - Only enabled if analysis includes target_path
-    // - Whisper references have no target_path → disable
-    // ----------------------------------------------------------
-    if (row.whisper_ref) {
-      autoCorrectBtn.disabled = true;
-      autoCorrectResult.textContent =
-        'Auto-correct not available for Whisper reference (no original target subtitle).';
-    } else if (autoCorrectBtn && data.target_path) {
+    // Auto-correct available when a real target subtitle exists
+    if (autoCorrectBtn && data.target_path) {
       autoCorrectBtn.disabled = false;
       autoCorrectResult.textContent =
         'Ready for auto-correction using current analysis.';
     } else {
       autoCorrectBtn.disabled = true;
-      autoCorrectResult.textContent = '';
+      autoCorrectResult.textContent = row.whisper_ref
+        ? 'Target subtitle missing — cannot auto-correct.'
+        : 'No target subtitle available for auto-correction.';
     }
   } catch (err) {
     console.error('movieinfo error', err);
