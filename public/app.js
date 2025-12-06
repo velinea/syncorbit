@@ -10,6 +10,8 @@ const targetPathInput = document.getElementById('targetPath');
 const alignBtn = document.getElementById('alignBtn');
 const summaryPre = document.getElementById('summary');
 const manualCanvas = document.getElementById('graphCanvas');
+const refSelect = document.getElementById('refSelect');
+const targetSelect = document.getElementById('targetSelect');
 
 // Library elements
 const loadLibraryBtn = document.getElementById('loadLibraryBtn');
@@ -132,14 +134,13 @@ async function runSearch(q) {
       div.textContent = g.base;
 
       div.onclick = () => {
-        // Prefer EN as reference, FI as target
         refPathInput.value = g.en || '';
         targetPathInput.value = g.fi || '';
-        alignBtn.disabled = !(refPathInput.value && targetPathInput.value);
-        summaryPre.textContent = `Selected: ${g.base}\nEN: ${g.en || '-'}\nFI: ${
-          g.fi || '-'
-        }`;
+        summaryPre.textContent = `Selected: ${g.base}`;
         clearManualGraph();
+
+        // NEW: load dropdowns
+        loadSubtitleChoices(g.base);
       };
 
       resultsDiv.appendChild(div);
@@ -185,6 +186,31 @@ if (alignBtn) {
       clearManualGraph();
     }
   });
+}
+
+async function loadSubtitleChoices(movieName) {
+  const res = await fetch(`/api/listsubs/${encodeURIComponent(movieName)}`);
+  const data = await res.json();
+
+  refSelect.innerHTML = '';
+  targetSelect.innerHTML = '';
+
+  // Whisper first (if exists)
+  if (data.whisper) {
+    refSelect.innerHTML += `<option value="${data.whisper}">Whisper Reference</option>`;
+  }
+
+  // Movie subs
+  data.subs.forEach(s => {
+    const label = `${s.file} [${s.lang}]`;
+    refSelect.innerHTML += `<option value="${s.path}">${label}</option>`;
+    targetSelect.innerHTML += `<option value="${s.path}">${label}</option>`;
+  });
+
+  // Enable align if target is chosen
+  refSelect.onchange = targetSelect.onchange = () => {
+    alignBtn.disabled = !(refSelect.value && targetSelect.value);
+  };
 }
 
 // -------- LIBRARY VIEW --------

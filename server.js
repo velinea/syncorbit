@@ -6,6 +6,7 @@ import { exec } from 'child_process';
 
 const app = express();
 const ROOT = '/app/media';
+const DATAROOT = '/app/data';
 
 app.use(express.json());
 app.use(express.static('public'));
@@ -300,5 +301,47 @@ function findVideoFile(folder) {
   const video = files.find(f => f.match(/\.(mkv|mp4|avi|mov)$/i));
   return video ? path.join(folder, video) : null;
 }
+
+app.get('/api/listsubs/:movie', (req, res) => {
+  const movie = req.params.movie;
+
+  const movieMediaDir = path.join(ROOT, movie);
+  const movieRefDir = path.join(DATAROOT, 'ref', movie);
+
+  const result = {
+    whisper: null,
+    subs: [],
+  };
+
+  // Whisper reference
+  const whisperPath = path.join(movieRefDir, 'ref.srt');
+  if (fs.existsSync(whisperPath)) {
+    result.whisper = whisperPath;
+  }
+
+  // Movie folder subtitles
+  if (fs.existsSync(movieMediaDir)) {
+    const files = fs.readdirSync(movieMediaDir);
+
+    for (const f of files) {
+      if (!f.toLowerCase().endsWith('.srt')) continue;
+
+      const full = path.join(movieMediaDir, f);
+      const lower = f.toLowerCase();
+
+      let lang = 'other';
+      if (lower.includes('.en') || lower.includes('eng')) lang = 'en';
+      if (lower.includes('.fi') || lower.includes('fin')) lang = 'fi';
+
+      result.subs.push({
+        lang,
+        path: full,
+        file: f,
+      });
+    }
+  }
+
+  res.json(result);
+});
 
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'));
