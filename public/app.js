@@ -133,17 +133,31 @@ async function runSearch(q) {
       div.className = 'result-item';
       div.textContent = g.base;
 
-      div.onclick = () => {
+      div.onclick = async () => {
         summaryPre.textContent = `Selected: ${g.base}`;
 
-        // NEW: load subtitle choices
-        loadSubtitleChoices(g.base);
+        clearManualGraph();
 
-        // Previous behavior
-        refPathInput.value = g.en || '';
-        targetPathInput.value = g.fi || '';
-        alignBtn.disabled = !(refPathInput.value && targetPathInput.value);
-        clearGraph();
+        // Load available subs (Whisper + EN/FI/other)
+        const data = await loadSubtitleChoices(g.base);
+
+        // Try to preselect EN as reference
+        if (data.whisper) {
+          // Prefer Whisper reference if available
+          refSelect.value = data.whisper;
+        } else {
+          const en = data.subs.find(s => s.lang === 'en');
+          if (en) refSelect.value = en.path;
+        }
+
+        // Try to preselect FI as target
+        const fi = data.subs.find(s => s.lang === 'fi');
+        if (fi) {
+          targetSelect.value = fi.path;
+        }
+
+        // Enable Align button if both selected
+        alignBtn.disabled = !(refSelect.value && targetSelect.value);
       };
 
       resultsDiv.appendChild(div);
