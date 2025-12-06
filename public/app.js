@@ -212,22 +212,24 @@ async function loadSubtitleChoices(movieName) {
   refSelect.innerHTML = '';
   targetSelect.innerHTML = '';
 
-  // Whisper first (if exists)
+  // Whisper first
   if (data.whisper) {
     refSelect.innerHTML += `<option value="${data.whisper}">Whisper Reference</option>`;
   }
 
-  // Movie subs
+  // Subs
   data.subs.forEach(s => {
     const label = `${s.file} [${s.lang}]`;
     refSelect.innerHTML += `<option value="${s.path}">${label}</option>`;
     targetSelect.innerHTML += `<option value="${s.path}">${label}</option>`;
   });
 
-  // Enable align if target is chosen
+  // Enable Align on change
   refSelect.onchange = targetSelect.onchange = () => {
     alignBtn.disabled = !(refSelect.value && targetSelect.value);
   };
+
+  return data; // VERY IMPORTANT
 }
 
 // -------- LIBRARY VIEW --------
