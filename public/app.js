@@ -135,7 +135,7 @@ async function runSearch(q) {
 
       div.onclick = async () => {
         summaryPre.textContent = `Selected: ${g.base}`;
-        clearGraph();
+        clearManualGraph();
 
         // Determine real movie folder name from any subtitle path
         const subPath = g.en || g.fi || (g.others && g.others[0]);
