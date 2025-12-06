@@ -210,7 +210,7 @@ if (alignBtn) {
       }
 
       renderSummary(data, summaryPre);
-      drawGraph(canvas, data.offsets || []);
+      drawGraph(manualCanvas, data.offsets || []);
     } catch (e) {
       summaryPre.textContent = 'Align failed: ' + e.message;
       clearManualGraph();
