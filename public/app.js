@@ -334,7 +334,7 @@ const runBatchScanBtn = document.getElementById('runBatchScanBtn');
 
 runBatchScanBtn.addEventListener('click', async () => {
   runBatchScanBtn.disabled = true;
-  runBatchScanBtn.textContent = 'Scanning… (this may take minutes)';
+  runBatchScanBtn.textContent = 'Scanning… (this may take some time)';
 
   try {
     const res = await fetch('/api/run-batch-scan', { method: 'POST' });
