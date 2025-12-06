@@ -133,40 +133,38 @@ async function runSearch(q) {
       div.className = 'result-item';
       div.textContent = g.base;
 
-      div.onclick = async () => {
-        summaryPre.textContent = `Selected: ${g.base}`;
+div.onclick = async () => {
+  summaryPre.textContent = `Selected: ${g.base}`;
+  clearGraph();
 
-        clearManualGraph();
-
-        // Load available subs (Whisper + EN/FI/other)
-        const data = await loadSubtitleChoices(g.base);
-
-        // Try to preselect EN as reference
-        if (data.whisper) {
-          // Prefer Whisper reference if available
-          refSelect.value = data.whisper;
-        } else {
-          const en = data.subs.find(s => s.lang === 'en');
-          if (en) refSelect.value = en.path;
-        }
-
-        // Try to preselect FI as target
-        const fi = data.subs.find(s => s.lang === 'fi');
-        if (fi) {
-          targetSelect.value = fi.path;
-        }
-
-        // Enable Align button if both selected
-        alignBtn.disabled = !(refSelect.value && targetSelect.value);
-      };
-
-      resultsDiv.appendChild(div);
-    });
-  } catch (e) {
-    console.error('search error', e);
-    resultsDiv.innerHTML = 'Error during search.';
+  // Determine real movie folder name from any subtitle path
+  const subPath = g.en || g.fi || (g.others && g.others[0]);
+  if (!subPath) {
+    console.error("No subtitle paths found for result:", g);
+    return;
   }
-}
+
+  // Extract actual folder name
+  const parts = subPath.split("/");
+  const movieFolder = parts[parts.length - 2];
+  console.log("Using folder:", movieFolder);
+
+  // Load choices for this actual folder
+  const data = await loadSubtitleChoices(movieFolder);
+
+  // Auto-select Whisper > EN > FI
+  if (data.whisper) {
+    refSelect.value = data.whisper;
+  } else {
+    const en = data.subs.find(s => s.lang === "en");
+    if (en) refSelect.value = en.path;
+  }
+
+  const fi = data.subs.find(s => s.lang === "fi");
+  if (fi) targetSelect.value = fi.path;
+
+  alignBtn.disabled = !(refSelect.value && targetSelect.value);
+};
 
 // -------- MANUAL ALIGN --------
 
