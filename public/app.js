@@ -210,7 +210,14 @@ if (alignBtn) {
       }
 
       renderSummary(data, summaryPre);
-      drawGraph(manualCanvas, data.offsets || []);
+      // drawGraph(manualCanvas, data.offsets || []);
+      // Use clean_offsets if available
+      const baseOffsets =
+        data.clean_offsets && data.clean_offsets.length
+          ? data.clean_offsets
+          : data.offsets || [];
+
+      drawGraph(manualCanvas, baseOffsets);
     } catch (e) {
       summaryPre.textContent = 'Align failed: ' + e.message;
       clearManualGraph();
