@@ -177,10 +177,19 @@ async function runSearch(q) {
 
 if (alignBtn) {
   alignBtn.addEventListener('click', async () => {
-    const reference = refPathInput.value.trim();
-    const target = targetPathInput.value.trim();
+    const refSel = document.getElementById('refSelect');
+    const tgtSel = document.getElementById('targetSelect');
+
+    if (!refSel || !tgtSel) {
+      summaryPre.textContent = 'Missing dropdowns (refSelect/targetSelect)';
+      return;
+    }
+
+    const reference = refSel.value.trim();
+    const target = tgtSel.value.trim();
+
     if (!reference || !target) {
-      summaryPre.textContent = 'Reference and target required.';
+      summaryPre.textContent = 'Please pick both reference and target subtitles.';
       return;
     }
 
@@ -201,9 +210,8 @@ if (alignBtn) {
       }
 
       renderSummary(data, summaryPre);
-      drawGraph(manualCanvas, data.clean_offsets || data.offsets || []);
+      drawGraph(canvas, data.offsets || []);
     } catch (e) {
-      console.error('align error', e);
       summaryPre.textContent = 'Align failed: ' + e.message;
       clearManualGraph();
     }
