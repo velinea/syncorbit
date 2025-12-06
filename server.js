@@ -302,49 +302,60 @@ function findVideoFile(folder) {
   return video ? path.join(folder, video) : null;
 }
 
-app.get('/api/listsubs/:movie', (req, res) => {
-  const movie = req.params.movie;
+const WHISPER_ROOT = path.join(DATAROOT, 'ref');
 
-  const mediaRoot = '/app/media';
-  const dataRoot = process.env.SYNCORBIT_DATA || '/app/data';
+// -------------------------
+// listsubs: return whisper + all .srt files
+// -------------------------
+app.get('/api/listsubs/:movie', async (req, res) => {
+  const movieName = req.params.movie;
+  const movieDir = path.join(ROOT, movieName);
 
-  const movieMediaDir = path.join(mediaRoot, movie);
-  const movieRefDir = path.join(dataRoot, 'ref', movie);
-
-  const result = {
-    whisper: null,
-    subs: [],
-  };
-
-  // Whisper reference
-  const whisperPath = path.join(movieRefDir, 'ref.srt');
-  if (fs.existsSync(whisperPath)) {
-    result.whisper = whisperPath;
+  // Validate movie folder
+  if (!fs.existsSync(movieDir) || !fs.statSync(movieDir).isDirectory()) {
+    return res.json({ whisper: null, subs: [] });
   }
 
-  // Movie folder subtitles
-  if (fs.existsSync(movieMediaDir)) {
-    const files = fs.readdirSync(movieMediaDir);
+  // Whisper reference
+  const whisperDir = path.join(WHISPER_ROOT, movieName);
+  let whisperRef = null;
 
-    for (const f of files) {
-      if (!f.toLowerCase().endsWith('.srt')) continue;
-
-      const full = path.join(movieMediaDir, f);
-      const lower = f.toLowerCase();
-
-      let lang = 'other';
-      if (lower.includes('.en') || lower.includes('eng')) lang = 'en';
-      if (lower.includes('.fi') || lower.includes('fin')) lang = 'fi';
-
-      result.subs.push({
-        lang,
-        path: full,
-        file: f,
-      });
+  if (fs.existsSync(whisperDir)) {
+    const whisperSrt = path.join(whisperDir, 'ref.srt');
+    if (fs.existsSync(whisperSrt)) {
+      whisperRef = whisperSrt;
     }
   }
 
-  res.json(result);
+  // List subtitle files inside movie folder
+  const files = fs.readdirSync(movieDir);
+  const subs = [];
+
+  for (const f of files) {
+    if (!f.toLowerCase().endsWith('.srt')) continue;
+
+    const fullPath = path.join(movieDir, f);
+
+    // Extract language tag
+    const lower = f.toLowerCase();
+
+    let lang = 'unknown';
+    if (lower.includes('.en.')) lang = 'en';
+    if (lower.includes('.eng.')) lang = 'en';
+    if (lower.includes('.fi.')) lang = 'fi';
+    if (lower.includes('.fin.')) lang = 'fi';
+
+    subs.push({
+      lang,
+      path: fullPath,
+      file: f,
+    });
+  }
+
+  res.json({
+    whisper: whisperRef,
+    subs,
+  });
 });
 
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'));
