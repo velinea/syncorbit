@@ -134,13 +134,16 @@ async function runSearch(q) {
       div.textContent = g.base;
 
       div.onclick = () => {
+        summaryPre.textContent = `Selected: ${g.base}`;
+
+        // NEW: load subtitle choices
+        loadSubtitleChoices(g.base);
+
+        // Previous behavior
         refPathInput.value = g.en || '';
         targetPathInput.value = g.fi || '';
-        summaryPre.textContent = `Selected: ${g.base}`;
-        clearManualGraph();
-
-        // NEW: load dropdowns
-        loadSubtitleChoices(g.base);
+        alignBtn.disabled = !(refPathInput.value && targetPathInput.value);
+        clearGraph();
       };
 
       resultsDiv.appendChild(div);
