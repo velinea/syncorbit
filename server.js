@@ -305,8 +305,11 @@ function findVideoFile(folder) {
 app.get('/api/listsubs/:movie', (req, res) => {
   const movie = req.params.movie;
 
-  const movieMediaDir = path.join(ROOT, movie);
-  const movieRefDir = path.join(DATAROOT, 'ref', movie);
+  const mediaRoot = '/app/media';
+  const dataRoot = process.env.SYNCORBIT_DATA || '/app/data';
+
+  const movieMediaDir = path.join(mediaRoot, movie);
+  const movieRefDir = path.join(dataRoot, 'ref', movie);
 
   const result = {
     whisper: null,
