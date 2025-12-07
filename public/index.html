@@ -88,36 +88,25 @@
 
       <!-- MANUAL ALIGN TAB -->
       <div id="tab-manual" class="tab">
-        <section class="card">
-          <h2>Search Subtitles</h2>
-          <input id="searchBox" type="text" placeholder="Search movie…" />
-          <div id="results"></div>
-        </section>
-
-        <section class="card">
-          <h2>Selected Pair</h2>
-          <div class="paths">
+        <div class="manual-controls">
+          <section class="card-manual">
+            <input id="searchBox" type="text" placeholder="Search movie…" />
+            <div id="results"></div>
+          </section>
+          <section class="card-manual">
             <div>
-              <label>Reference</label>
-              <select id="refSelect"></select>
+              <select id="refSelect">
+                <option value="" disabled selected>Select reference</option>
+              </select>
             </div>
             <div>
-              <label>Target</label>
-              <select id="targetSelect"></select>
+              <select id="targetSelect">
+                <option value="" disabled selected>Select target</option>
+              </select>
             </div>
-          </div>
-          <!--           <div class="paths">
-            <div>
-              <label>Reference (EN)</label>
-              <input id="refPath" type="text" readonly />
-            </div>
-            <div>
-              <label>Target (FI)</label>
-              <input id="targetPath" type="text" readonly />
-            </div>
-          </div> -->
+          </section>
           <button id="alignBtn" disabled>Align</button>
-        </section>
+        </div>
 
         <section class="card">
           <h2>Result</h2>

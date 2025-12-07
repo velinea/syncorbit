@@ -26,12 +26,28 @@ h1 {
 }
 
 .card {
-  position: relative;
   background: #111827;
   padding: 0 16px;
   margin-bottom: 20px;
   border-radius: 10px;
   box-shadow: 0 0 10px #0006;
+}
+
+.card-manual {
+  width: 45%;
+  height: 150px;
+  background: #111827;
+  padding: 0 10px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px #0006;
+}
+
+.manual-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
 }
 
 .card h3 {
@@ -89,14 +105,12 @@ h1 {
 }
 
 #searchBox {
-  width: 100%;
   padding: 10px;
   font-size: 16px;
   border-radius: 6px;
   border: 1px solid #374151;
   background: #020617;
   color: #e5e7eb;
-  margin-bottom: 10px;
 }
 
 #results {
