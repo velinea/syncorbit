@@ -391,7 +391,9 @@ def compute_metrics(anchors: List[dict]) -> dict:
     }
 
 
-def decide_quality(anchor_count: int, avg_offset: float, drift_span: float) -> str:
+def decide_quality(
+    anchor_count: int, ref_count: int, avg_offset: float, drift_span: float
+) -> str:
     """
     Decision logic for SyncOrbit:
       - 'synced': good anchors, low drift, small offset
