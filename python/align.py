@@ -398,8 +398,12 @@ def decide_quality(anchor_count: int, avg_offset: float, drift_span: float) -> s
       - 'whisper_required': few anchors or large drift/offset
       - 'needs_adjustment': somewhere in between
     """
-    # few matches -> alignment unreliable
-    if anchor_count < 10:
+    # --- Anchor percentage logic (Option A) ---
+    ref_count_safe = ref_count if ref_count > 0 else 1
+    anchor_ratio = anchor_count / ref_count_safe  # fraction of matched lines
+
+    # <3% anchors → too weak to trust
+    if anchor_ratio < 0.03:
         return "whisper_required"
 
     if drift_span > 3.5:
@@ -408,7 +412,7 @@ def decide_quality(anchor_count: int, avg_offset: float, drift_span: float) -> s
     if abs(avg_offset) > 4.0:
         return "whisper_required"
 
-    if anchor_count >= 20 and drift_span <= 2.0 and abs(avg_offset) <= 1.0:
+    if anchor_ratio >= 0.10 and drift_span <= 2.0 and abs(avg_offset) <= 1.0:
         return "synced"
 
     return "needs_adjustment"
