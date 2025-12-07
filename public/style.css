@@ -116,7 +116,7 @@ h1 {
 #results {
   background: #020617;
   border-radius: 6px;
-  max-height: 140px;
+  max-height: 120px;
   overflow-y: auto;
 }
 .result-item {
