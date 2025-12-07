@@ -510,6 +510,7 @@ def main():
     # Decision now based on ROBUST metrics
     decision = decide_quality(
         anchor_count_clean,
+        ref_count,
         avg_offset_clean,
         robust_span,
     )
