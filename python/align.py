@@ -48,13 +48,13 @@ from fastembed import TextEmbedding
 MIN_SIM = 0.40  # was ~0.35; you can push up/down a bit
 
 # Max ratio between longer/shorter text lengths
-MAX_LEN_RATIO = 1.5  # you saw 3 → good results
+MAX_LEN_RATIO = 2  # you saw 3 → good results
 
 # Max ratio between longer/shorter cue durations
-MAX_DUR_RATIO = 1.5
+MAX_DUR_RATIO = 2
 
 # Minimum characters for a line to be considered as an anchor candidate
-MIN_CHARS = 10
+MIN_CHARS = 8
 
 # Residual threshold bounds for regression-based cleanup
 RESID_MIN = 0.8  # don't be tighter than this
