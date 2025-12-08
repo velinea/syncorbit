@@ -133,56 +133,18 @@ def main():
         whisper_ref_path = REF_ROOT / movie / "ref.srt"
 
         # --------------------------------------------------
-        # Decide whether to reuse analysis or re-align
-        # --------------------------------------------------
-        reuse = False
-        reanalyze = False
-
-        if syncinfo_path.exists():
-            if whisper_ref_path.exists():
-                # If we have a Whisper ref and it's newer than analysis -> reanalyze
-                try:
-                    if whisper_ref_path.stat().st_mtime > syncinfo_path.stat().st_mtime:
-                        reanalyze = True
-                    else:
-                        reuse = True
-                except OSError:
-                    # If stat fails for some reason, be conservative and reuse
-                    reuse = True
-            else:
-                # No Whisper ref, but we do have analysis -> reuse
-                reuse = True
-
-        else:
-            # No syncinfo at all -> must analyze
-            reanalyze = True
-
-        # --------------------------------------------------
-        # Case 1: reuse existing analysis
-        # --------------------------------------------------
-        if reuse:
-            try:
-                with open(syncinfo_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                append_summary(movie, data)
-                print(f"→ Reusing existing analysis: {movie}")
-                continue
-            except Exception as e:
-                print(f"→ ERROR reading {syncinfo_path}: {e}")
-                # fall through to reanalyze
-
-        # --------------------------------------------------
-        # Case 2: need to analyze (new or reanalyze)
+        # Determine subtitle pair (ref, tgt)
         # --------------------------------------------------
         ref = None
         tgt = None
+        use_whisper = False
 
+        # 1. Whisper reference exists?
         if whisper_ref_path.exists():
-            # Whisper reference available -> use it
             ref = whisper_ref_path
-            print(f"→ Using Whisper reference for {movie}")
+            use_whisper = True
 
-            # Try to find FI subtitle as target in media folder
+            # Find FI subtitle as target
             for srt in folder.glob("*.srt"):
                 name = srt.stem.lower()
                 if name.endswith(("fi", "fin")):
@@ -190,28 +152,63 @@ def main():
                     break
 
             if not tgt:
-                print(f"→ No FI subtitle found for {movie}, skipping")
                 continue
+
+        # 2. No Whisper ref → try EN/FI pair inside media
         else:
-            # Fallback: EN/FI pair inside media
             pair = find_en_fi_pair(folder)
             if not pair:
-                print(f"→ No subtitle pair in {movie}")
                 continue
             ref, tgt = pair
 
-        print(f"→ Aligning {ref.name} <-> {tgt.name}   [{movie}]")
+        # --------------------------------------------------
+        # Decide whether to reuse analysis or re-align
+        # --------------------------------------------------
+        analyze = False
 
+        if not syncinfo_path.exists():
+            analyze = True
+        else:
+            try:
+                sync_mtime = syncinfo_path.stat().st_mtime
+                ref_mtime = ref.stat().st_mtime
+                tgt_mtime = tgt.stat().st_mtime
+
+                # Whisper reference fresher than analysis → reanalyze
+                if use_whisper and ref_mtime > sync_mtime:
+                    analyze = True
+
+                # Target subtitle fresher → reanalyze
+                elif tgt_mtime > sync_mtime or ref_mtime > sync_mtime:
+                    analyze = True
+
+            except OSError:
+                analyze = True
+
+        # --------------------------------------------------
+        # Case 1: reuse existing syncinfo
+        # --------------------------------------------------
+        if not analyze:
+            try:
+                with open(syncinfo_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                append_summary(movie, data)
+                continue
+            except Exception as e:
+                analyze = True
+
+        # --------------------------------------------------
+        # Case 2: Need to run aligner
+        # --------------------------------------------------
         try:
             data = run_align(ref, tgt)
         except Exception as e:
-            print(f"ERROR aligning {movie}: {e}")
+            print(f"ERROR:", e)
             continue
 
-        write_syncinfo(movie, data)
+        write_syncinfo(folder, data)
         append_summary(movie, data)
-
-        print(f"✔ Done: {movie} ({data.get('decision', 'unknown')})")
+        print(f"✔ Done: {movie} ({data['decision']})")
 
     print("Batch scan complete.")
 
