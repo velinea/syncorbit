@@ -414,7 +414,7 @@ def decide_quality(
     if abs(avg_offset) > 4.0:
         return "whisper_required"
 
-    if anchor_ratio >= 0.10 and drift_span <= 2.0 and abs(avg_offset) <= 1.0:
+    if anchor_ratio >= 0.06 and drift_span <= 2.0 and abs(avg_offset) <= 1.0:
         return "synced"
 
     return "needs_adjustment"
