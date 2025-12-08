@@ -206,7 +206,7 @@ def main():
             print(f"ERROR:", e)
             continue
 
-        write_syncinfo(folder, data)
+        write_syncinfo(movie, data)
         append_summary(movie, data)
         print(f"✔ Done: {movie} ({data['decision']})")
 
