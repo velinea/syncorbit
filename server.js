@@ -149,7 +149,7 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
       console.log('FFSYNC:', { inVideo, inSub, outSub });
 
       const args = [inVideo, '-i', inSub, '-o', outSub];
-
+      const { spawnSync } = require('child_process');
       const result = spawnSync('ffsubsync', args, {
         encoding: 'utf-8',
         maxBuffer: 50 * 1024 * 1024,
