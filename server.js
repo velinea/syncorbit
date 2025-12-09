@@ -141,7 +141,7 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
 
       // Output goes inside /app/data/resync/<movie>.srt
       const safeName = movie.replace(/[^\w\d-]/g, '_');
-      const outDir = path.join(DATA_ROOT, 'resync');
+      const outDir = path.join(DATAROOT, 'resync');
       const outSub = path.join(outDir, safeName + '.synced.srt');
 
       fs.mkdirSync(outDir, { recursive: true });
