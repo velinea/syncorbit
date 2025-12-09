@@ -24,6 +24,7 @@ const librarySummaryPre = document.getElementById('librarySummary');
 const libraryCanvas = document.getElementById('libraryGraph');
 const autoCorrectBtn = document.getElementById('autoCorrectBtn');
 const autoCorrectResult = document.getElementById('autoCorrectResult');
+const bulkBtn = document.getElementById('bulkActionsBtn');
 
 // Tabs
 const tabButtons = document.querySelectorAll('#tabs button');
@@ -572,8 +573,31 @@ document.addEventListener('change', e => {
 
 function updateSelectionState() {
   const selected = document.querySelectorAll('.row-check:checked').length;
-  console.log('Selected rows:', selected);
+
+  if (selected > 0) {
+    bulkBtn.disabled = false;
+    bulkBtn.classList.add('enabled');
+  } else {
+    bulkBtn.disabled = true;
+    bulkBtn.classList.remove('enabled');
+  }
 }
+bulkBtn.addEventListener('click', () => {
+  const modal = document.getElementById('bulkModal');
+  const text = document.getElementById('bulkModalText');
+
+  const selectedMovies = [...document.querySelectorAll('.row-check:checked')].map(
+    x => x.dataset.movie
+  );
+
+  text.textContent = `Selected:\n${selectedMovies.join('\n')}`;
+
+  modal.style.display = 'block';
+});
+
+document.getElementById('bulkModalClose').onclick = () => {
+  document.getElementById('bulkModal').style.display = 'none';
+};
 
 // -------- INITIAL SETUP --------
 

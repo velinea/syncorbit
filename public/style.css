@@ -205,6 +205,38 @@ button:disabled {
   color: #e5e7eb;
   font-size: 14px;
 }
+.bulk-btn {
+  margin: 10px 0;
+  padding: 6px 12px;
+  background: #444;
+  color: white;
+  border: none;
+  cursor: pointer;
+  opacity: 0.5;
+}
+.bulk-btn.enabled {
+  opacity: 1;
+  background: #0074d9;
+}
+
+/* very small modal */
+#bulkModal {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #222;
+  border: 1px solid #666;
+  padding: 20px;
+  display: none;
+  z-index: 2000;
+  width: 280px;
+  color: white;
+}
+
+#bulkModal button {
+  margin-top: 10px;
+}
 
 .library-limit-label {
   font-size: 14px;
