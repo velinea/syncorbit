@@ -32,8 +32,27 @@
             <button id="bulkActionsBtn" disabled class="bulk-btn">Bulk Actions</button>
 
             <div id="bulkModal">
-              <div id="bulkModalText">Bulk actions here…</div>
-              <button id="bulkModalClose">Close</button>
+              <div id="bulkModalText" style="white-space: pre-line"></div>
+
+              <div style="margin-top: 15px">
+                <label
+                  ><input type="radio" name="bulkAction" value="touch" /> Update SRT
+                  timestamps</label
+                ><br />
+                <label
+                  ><input type="radio" name="bulkAction" value="delete_ref" /> Delete
+                  Whisper reference</label
+                ><br />
+                <label
+                  ><input type="radio" name="bulkAction" value="ignore" /> Ignore
+                  selected movie folders</label
+                >
+              </div>
+
+              <div style="margin-top: 15px">
+                <button id="bulkRunBtn">Run</button>
+                <button id="bulkModalClose">Cancel</button>
+              </div>
             </div>
 
             <button id="runBatchScanBtn" class="button-secondary">

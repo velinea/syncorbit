@@ -37,6 +37,7 @@ let librarySortKey = 'movie';
 let librarySortDir = 'asc';
 let currentLibraryRow = null;
 let currentLibraryAnalysis = null;
+let currentBulkSelection = [];
 
 // -------- TAB SWITCHING --------
 
@@ -590,12 +591,31 @@ bulkBtn.addEventListener('click', () => {
     x => x.dataset.movie
   );
 
-  text.textContent = `Selected:\n${selectedMovies.join('\n')}`;
+  text.textContent = `Selected movies:\n${selectedMovies.join('\n')}`;
 
+  currentBulkSelection = selectedMovies; // store for “Run” button
   modal.style.display = 'block';
 });
 
 document.getElementById('bulkModalClose').onclick = () => {
+  document.getElementById('bulkModal').style.display = 'none';
+};
+
+document.getElementById('bulkRunBtn').onclick = () => {
+  const action = document.querySelector("input[name='bulkAction']:checked");
+
+  if (!action) {
+    alert('Choose an action first!');
+    return;
+  }
+
+  const choice = action.value;
+
+  console.log('Bulk action:', choice);
+  console.log('Movies:', currentBulkSelection);
+
+  alert(`SIMULATED ACTION:\n${choice}\n${currentBulkSelection.length} movie(s)`);
+
   document.getElementById('bulkModal').style.display = 'none';
 };
 
