@@ -5,9 +5,9 @@ import fs from 'fs';
 import { exec } from 'child_process';
 
 const app = express();
-const ROOT = '/app/media';
-const DATAROOT = '/app/data';
-const WHISPER_ROOT = path.join(DATAROOT, 'ref');
+const MEDIA_ROOT = '/app/media';
+const DATA_ROOT = '/app/data';
+const WHISPER_ROOT = path.join(DATA_ROOT, 'ref');
 const IGNORE_FILE = path.join(
   process.env.SYNCORBIT_DATA || '/app/data',
   'ignore_list.json'
@@ -36,7 +36,7 @@ app.post('/api/bulk/touch', express.json(), (req, res) => {
 
   movies.forEach(movie => {
     try {
-      const movieDir = path.join(ROOT, movie);
+      const movieDir = path.join(MEDIA_ROOT, movie);
 
       if (!fs.existsSync(movieDir)) {
         results.push({ movie, error: 'Movie folder not found' });
@@ -44,7 +44,7 @@ app.post('/api/bulk/touch', express.json(), (req, res) => {
       }
 
       // Write harmless metadata to /app/data/touch/<movie>.touch
-      const touchPath = path.join(DATAROOT, 'touch', `${movie}.touch`);
+      const touchPath = path.join(DATA_ROOT, 'touch', `${movie}.touch`);
       fs.mkdirSync(path.dirname(touchPath), { recursive: true });
       fs.writeFileSync(touchPath, Date.now().toString());
 
@@ -65,7 +65,7 @@ app.post('/api/bulk/delete_ref', express.json(), (req, res) => {
 
   movies.forEach(movie => {
     try {
-      const refFile = path.join(DATAROOT, 'ref', movie, 'ref.srt');
+      const refFile = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
 
       if (fs.existsSync(refFile)) {
         fs.unlinkSync(refFile);
@@ -100,92 +100,65 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
   const results = [];
   const errors = [];
 
-  function countLines(filePath) {
-    try {
-      const text = fs.readFileSync(filePath, 'utf8');
-      return text.split(/\r?\n/).filter(line => line.trim().length > 0).length;
-    } catch {
-      return null;
-    }
-  }
-
   for (const movie of movies) {
     try {
-      const movieDir = path.join(ROOT, movie);
+      const movieDir = path.join(MEDIA_ROOT, movie);
 
-      // Find a reference video
-      const candidates = fs
-        .readdirSync(movieDir)
-        .filter(f => /\.(mp4|mkv|avi|mov)$/i.test(f))
-        .map(f => path.join(movieDir, f));
-
-      const inVideo = candidates[0];
-      if (!inVideo) {
-        errors.push({ movie, error: 'No video file found' });
+      // Find video file
+      const video = fs.readdirSync(movieDir).find(f => /\.(mp4|mkv|avi|mov)$/i.test(f));
+      if (!video) {
+        errors.push({ movie, error: 'No video found' });
         continue;
       }
 
-      // Find EN subtitle (input)
-      const subs = fs
-        .readdirSync(movieDir)
-        .filter(f => /\.srt$/i.test(f))
-        .map(f => path.join(movieDir, f));
-
-      let inSub = subs.find(
-        s => s.toLowerCase().endsWith('.en.srt') || s.toLowerCase().endsWith('.eng.srt')
-      );
-      if (!inSub) {
+      // Find EN subtitle
+      const enSub = fs.readdirSync(movieDir).find(f => /\.en\.srt$/i.test(f));
+      if (!enSub) {
         errors.push({ movie, error: 'No EN subtitle found' });
         continue;
       }
 
-      // Output goes inside /app/data/resync/<movie>.srt
-      const safeName = movie.replace(/[^\w\d-]/g, '_');
-      const outDir = path.join(DATAROOT, 'resync');
-      const outSub = path.join(outDir, safeName + '.synced.srt');
+      // Input paths
+      const inVideo = path.join(movieDir, video);
+      const inSub = path.join(movieDir, enSub);
 
+      // Output folder in /app/data/resync/<movie>
+      const outDir = path.join(DATA_ROOT, 'resync', movie);
       fs.mkdirSync(outDir, { recursive: true });
 
-      console.log('FFSYNC:', { inVideo, inSub, outSub });
+      // Output filename = same name + ".synced.srt"
+      const outSub = path.join(outDir, enSub.replace(/\.srt$/i, '.synced.srt'));
 
-      const args = [inVideo, '-i', inSub, '-o', outSub];
+      // --- Run ffsubsync ---
       const { spawnSync } = require('child_process');
-      const result = spawnSync('ffsubsync', args, {
+      const result = spawnSync('ffsubsync', [inVideo, '-i', inSub, '-o', outSub], {
         encoding: 'utf-8',
-        maxBuffer: 50 * 1024 * 1024,
+        maxBuffer: 1024 * 1024 * 10,
       });
-
-      if (result.error) {
-        errors.push({ movie, error: result.error.message });
-        continue;
-      }
 
       if (result.status !== 0) {
         errors.push({
           movie,
-          error: result.stderr || result.stdout || 'ffsubsync failed',
+          error: result.stderr || 'ffsubsync failed',
         });
         continue;
       }
 
-      // -----------------------------
-      // Extract ffsubsync score
-      // -----------------------------
-      const scoreMatch = result.stdout.match(/score:\s*([0-9.]+)/i);
-      const rawScore = scoreMatch ? parseFloat(scoreMatch[1]) : null;
-
-      const subCount = countLines(inSub);
-      const normScore = rawScore && subCount ? rawScore / subCount : null;
+      // Extract ffsubsync score if present
+      let rawScore = null;
+      const match = result.stdout.match(/score\s*=\s*([0-9.\-e+]+)/i);
+      if (match) rawScore = parseFloat(match[1]);
 
       results.push({
         movie,
-        ok: true,
+        inVideo,
+        inSub,
+        outSub,
         raw_score: rawScore,
-        normalized_score: normScore,
         output: result.stdout,
       });
     } catch (err) {
-      errors.push({ movie, error: err.message });
+      errors.push({ movie, error: String(err) });
     }
   }
 
@@ -275,7 +248,7 @@ app.get('/api/searchsubs', (req, res) => {
   const q = (req.query.q || '').toLowerCase();
   if (q.length < 2) return res.json([]);
 
-  const cmd = `find ${ROOT} -type f -iname '*.srt' -print`;
+  const cmd = `find ${MEDIA_ROOT} -type f -iname '*.srt' -print`;
 
   exec(cmd, (err, stdout) => {
     if (err) return res.json([]);
@@ -426,13 +399,13 @@ app.get('/api/movieinfo', (req, res) => {
 
 // List movie folders
 app.get('/api/movies', (req, res) => {
-  const entries = fs.readdirSync(ROOT, { withFileTypes: true });
+  const entries = fs.readdirSync(MEDIA_ROOT, { withFileTypes: true });
 
   const movies = entries
     .filter(e => e.isDirectory())
     .map(e => ({
       name: e.name,
-      path: path.join(ROOT, e.name),
+      path: path.join(MEDIA_ROOT, e.name),
     }));
 
   res.json(movies);
@@ -488,7 +461,7 @@ function findVideoFile(folder) {
 // -------------------------
 app.get('/api/listsubs/:movie', async (req, res) => {
   const movieName = req.params.movie;
-  const movieDir = path.join(ROOT, movieName);
+  const movieDir = path.join(MEDIA_ROOT, movieName);
 
   // Validate movie folder
   if (!fs.existsSync(movieDir) || !fs.statSync(movieDir).isDirectory()) {
