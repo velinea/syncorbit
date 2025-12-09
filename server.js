@@ -95,6 +95,64 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
   res.json({ ok: true, total: ignoreList.length });
 });
 
+app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
+  const movies = req.body.movies || [];
+  let processed = 0;
+  let errors = [];
+
+  for (const movie of movies) {
+    try {
+      const mediaDir = path.join(ROOT, movie);
+      const resyncDir = path.join(DATAROOT, 'resync', movie);
+      fs.mkdirSync(resyncDir, { recursive: true });
+
+      // Find English subtitle
+      const files = fs.readdirSync(mediaDir);
+      const en = files.find(
+        f => f.toLowerCase().endsWith('.en.srt') || f.toLowerCase().endsWith('.eng.srt')
+      );
+
+      if (!en) {
+        errors.push({ movie, error: 'No EN subtitle' });
+        continue;
+      }
+
+      // Find video file
+      const video = files.find(f => f.match(/\.(mp4|mkv|avi|mov)$/i));
+
+      if (!video) {
+        errors.push({ movie, error: 'No video file' });
+        continue;
+      }
+
+      const inSub = path.join(mediaDir, en);
+      const inVideo = path.join(mediaDir, video);
+      const outSub = path.join(resyncDir, 'en.resync.srt');
+
+      // Run ffsubsync
+      const { spawnSync } = require('child_process');
+      const result = spawnSync('ffsubsync', [inVideo, '-i', inSub, '-o', outSub], {
+        encoding: 'utf-8',
+      });
+
+      if (result.status !== 0) {
+        errors.push({ movie, error: result.stderr || 'ffsubsync failed' });
+        continue;
+      }
+
+      processed++;
+    } catch (e) {
+      errors.push({ movie, error: e.message });
+    }
+  }
+
+  res.json({
+    ok: true,
+    processed,
+    errors,
+  });
+});
+
 app.post('/api/analyze', (req, res) => {
   const file = req.body.path;
   if (!file) return res.status(400).json({ error: 'no file' });

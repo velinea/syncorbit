@@ -4,3 +4,4 @@ scipy
 rapidfuzz
 python-dotenv
 scikit-learn
+ffsubsync

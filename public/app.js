@@ -612,6 +612,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     touch: '/api/bulk/touch',
     delete_ref: '/api/bulk/delete_ref',
     ignore: '/api/bulk/ignore',
+    ffsubsync: '/api/bulk/ffsubsync',
   }[action.value];
 
   const res = await fetch(endpoint, {
@@ -624,6 +625,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   alert('Done:\n' + JSON.stringify(out, null, 2));
 
   document.getElementById('bulkModal').style.display = 'none';
+  updateSelectionState();
   loadLibrary(); // refresh table
 };
 

@@ -26,6 +26,7 @@ DATA_ROOT = Path(os.environ.get("SYNCORBIT_DATA", "/app/data"))
 
 ANALYSIS_ROOT = DATA_ROOT / "analysis"
 REF_ROOT = DATA_ROOT / "ref"
+RESYNC_ROOT = DATA_ROOT / "resync"
 SUMMARY_CSV = DATA_ROOT / "syncorbit_library_summary.csv"
 IGNORE_FILE = DATA_ROOT / "ignore_list.json"
 
@@ -172,6 +173,23 @@ def main():
 
         # 2. No Whisper ref → try EN/FI pair inside media
         else:
+            resync_ref_path = RESYNC_ROOT / movie / "en.resync.srt"
+
+            if resync_ref_path.exists():
+                ref = resync_ref_path
+                print(f"→ Using ffsubsync EN reference for {movie}")
+
+                # Find FI subtitle as target
+                for srt in folder.glob("*.srt"):
+                    n = srt.stem.lower()
+                    if n.endswith(("fi", "fin")):
+                        tgt = srt
+                        break
+
+                if not tgt:
+                    print(f"→ No FI subtitle found for {movie}, skipping")
+                    continue
+
             pair = find_en_fi_pair(folder)
             if not pair:
                 continue
