@@ -111,7 +111,7 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
 
   for (const movie of movies) {
     try {
-      const movieDir = path.join(MEDIA_ROOT, movie);
+      const movieDir = path.join(ROOT, movie);
 
       // Find a reference video
       const candidates = fs
