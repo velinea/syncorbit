@@ -5,8 +5,6 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
-const compression = require('compression');
-const cors = require('cors');
 
 // Load environment variables if needed
 require('dotenv').config();
