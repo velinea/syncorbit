@@ -5,3 +5,4 @@ rapidfuzz
 python-dotenv
 scikit-learn
 ffsubsync
+PyExecJS
