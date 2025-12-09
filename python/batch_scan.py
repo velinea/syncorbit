@@ -27,13 +27,26 @@ DATA_ROOT = Path(os.environ.get("SYNCORBIT_DATA", "/app/data"))
 ANALYSIS_ROOT = DATA_ROOT / "analysis"
 REF_ROOT = DATA_ROOT / "ref"
 SUMMARY_CSV = DATA_ROOT / "syncorbit_library_summary.csv"
+IGNORE_FILE = DATA_ROOT / "ignore_list.json"
 
 ALIGN_PY = "python/align.py"
-
 
 # ----------------------------
 # Helpers
 # ----------------------------
+
+
+def load_ignore_list():
+    if IGNORE_FILE.exists():
+        try:
+            return set(json.load(open(IGNORE_FILE)))
+        except:
+            return set()
+    return set()
+
+
+ignored = load_ignore_list()
+print(f"Ignored movies: {len(ignored)}")
 
 
 def find_en_fi_pair(folder: Path):
@@ -128,6 +141,9 @@ def main():
             continue
 
         movie = folder.name
+        if movie in ignored:
+            print(f"→ Skipping (ignored): {movie}")
+            continue
 
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
         whisper_ref_path = REF_ROOT / movie / "ref.srt"

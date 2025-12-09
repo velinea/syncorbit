@@ -601,22 +601,30 @@ document.getElementById('bulkModalClose').onclick = () => {
   document.getElementById('bulkModal').style.display = 'none';
 };
 
-document.getElementById('bulkRunBtn').onclick = () => {
+document.getElementById('bulkRunBtn').onclick = async () => {
   const action = document.querySelector("input[name='bulkAction']:checked");
-
   if (!action) {
-    alert('Choose an action first!');
+    alert('Choose an action first');
     return;
   }
 
-  const choice = action.value;
+  const endpoint = {
+    touch: '/api/bulk/touch',
+    delete_ref: '/api/bulk/delete_ref',
+    ignore: '/api/bulk/ignore',
+  }[action.value];
 
-  console.log('Bulk action:', choice);
-  console.log('Movies:', currentBulkSelection);
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ movies: currentBulkSelection }),
+  });
 
-  alert(`SIMULATED ACTION:\n${choice}\n${currentBulkSelection.length} movie(s)`);
+  const out = await res.json();
+  alert('Done:\n' + JSON.stringify(out, null, 2));
 
   document.getElementById('bulkModal').style.display = 'none';
+  loadLibrary(); // refresh table
 };
 
 // -------- INITIAL SETUP --------

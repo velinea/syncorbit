@@ -7,9 +7,87 @@ import { exec } from 'child_process';
 const app = express();
 const ROOT = '/app/media';
 const DATAROOT = '/app/data';
+const WHISPER_ROOT = path.join(DATAROOT, 'ref');
+const IGNORE_FILE = path.join(
+  process.env.SYNCORBIT_DATA || '/app/data',
+  'ignore_list.json'
+);
 
 app.use(express.json());
 app.use(express.static('public'));
+
+function loadIgnoreList() {
+  try {
+    return JSON.parse(fs.readFileSync(IGNORE_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function saveIgnoreList(list) {
+  fs.writeFileSync(IGNORE_FILE, JSON.stringify(list, null, 2));
+}
+
+app.post('/api/bulk/touch', express.json(), async (req, res) => {
+  const movies = req.body.movies || [];
+  let count = 0;
+
+  for (const movie of movies) {
+    const mediaDir = path.join(MEDIA, movie);
+    const dataRef = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
+
+    // Touch whisper ref
+    if (fs.existsSync(dataRef)) {
+      fs.utimesSync(dataRef, new Date(), new Date());
+    }
+
+    // Touch subtitles inside media
+    if (fs.existsSync(mediaDir)) {
+      const files = fs.readdirSync(mediaDir);
+
+      for (const f of files) {
+        if (f.toLowerCase().endsWith('.srt')) {
+          const p = path.join(mediaDir, f);
+          fs.utimesSync(p, new Date(), new Date());
+        }
+      }
+    }
+
+    count++;
+  }
+
+  res.json({ ok: true, processed: count });
+});
+
+app.post('/api/bulk/delete_ref', express.json(), async (req, res) => {
+  const movies = req.body.movies || [];
+  let removed = 0;
+
+  for (const movie of movies) {
+    const refPath = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
+
+    if (fs.existsSync(refPath)) {
+      fs.unlinkSync(refPath);
+      removed++;
+    }
+  }
+
+  res.json({ ok: true, removed });
+});
+
+app.post('/api/bulk/ignore', express.json(), async (req, res) => {
+  const movies = req.body.movies || [];
+  let ignoreList = loadIgnoreList();
+
+  for (const m of movies) {
+    if (!ignoreList.includes(m)) {
+      ignoreList.push(m);
+    }
+  }
+
+  saveIgnoreList(ignoreList);
+  res.json({ ok: true, total: ignoreList.length });
+});
 
 app.post('/api/analyze', (req, res) => {
   const file = req.body.path;
@@ -301,8 +379,6 @@ function findVideoFile(folder) {
   const video = files.find(f => f.match(/\.(mkv|mp4|avi|mov)$/i));
   return video ? path.join(folder, video) : null;
 }
-
-const WHISPER_ROOT = path.join(DATAROOT, 'ref');
 
 // -------------------------
 // listsubs: return whisper + all .srt files
