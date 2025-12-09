@@ -97,60 +97,99 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
 
 app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
   const movies = req.body.movies || [];
-  let processed = 0;
-  let errors = [];
+  const results = [];
+  const errors = [];
 
-  for (const movie of movies) {
+  function countLines(filePath) {
     try {
-      const mediaDir = path.join(ROOT, movie);
-      const resyncDir = path.join(DATAROOT, 'resync', movie);
-      fs.mkdirSync(resyncDir, { recursive: true });
-
-      // Find English subtitle
-      const files = fs.readdirSync(mediaDir);
-      const en = files.find(
-        f => f.toLowerCase().endsWith('.en.srt') || f.toLowerCase().endsWith('.eng.srt')
-      );
-
-      if (!en) {
-        errors.push({ movie, error: 'No EN subtitle' });
-        continue;
-      }
-
-      // Find video file
-      const video = files.find(f => f.match(/\.(mp4|mkv|avi|mov)$/i));
-
-      if (!video) {
-        errors.push({ movie, error: 'No video file' });
-        continue;
-      }
-
-      const inSub = path.join(mediaDir, en);
-      const inVideo = path.join(mediaDir, video);
-      const outSub = path.join(resyncDir, 'en.resync.srt');
-
-      // Run ffsubsync
-      const { spawnSync } = require('child_process');
-      const result = spawnSync('ffsubsync', [inVideo, '-i', inSub, '-o', outSub], {
-        encoding: 'utf-8',
-      });
-
-      if (result.status !== 0) {
-        errors.push({ movie, error: result.stderr || 'ffsubsync failed' });
-        continue;
-      }
-
-      processed++;
-    } catch (e) {
-      errors.push({ movie, error: e.message });
+      const text = fs.readFileSync(filePath, 'utf8');
+      return text.split(/\r?\n/).filter(line => line.trim().length > 0).length;
+    } catch {
+      return null;
     }
   }
 
-  res.json({
-    ok: true,
-    processed,
-    errors,
-  });
+  for (const movie of movies) {
+    try {
+      const movieDir = path.join(MEDIA_ROOT, movie);
+
+      // Find a reference video
+      const candidates = fs
+        .readdirSync(movieDir)
+        .filter(f => /\.(mp4|mkv|avi|mov)$/i.test(f))
+        .map(f => path.join(movieDir, f));
+
+      const inVideo = candidates[0];
+      if (!inVideo) {
+        errors.push({ movie, error: 'No video file found' });
+        continue;
+      }
+
+      // Find EN subtitle (input)
+      const subs = fs
+        .readdirSync(movieDir)
+        .filter(f => /\.srt$/i.test(f))
+        .map(f => path.join(movieDir, f));
+
+      let inSub = subs.find(
+        s => s.toLowerCase().endsWith('.en.srt') || s.toLowerCase().endsWith('.eng.srt')
+      );
+      if (!inSub) {
+        errors.push({ movie, error: 'No EN subtitle found' });
+        continue;
+      }
+
+      // Output goes inside /app/data/resync/<movie>.srt
+      const safeName = movie.replace(/[^\w\d-]/g, '_');
+      const outDir = path.join(DATA_ROOT, 'resync');
+      const outSub = path.join(outDir, safeName + '.synced.srt');
+
+      fs.mkdirSync(outDir, { recursive: true });
+
+      console.log('FFSYNC:', { inVideo, inSub, outSub });
+
+      const args = [inVideo, '-i', inSub, '-o', outSub];
+
+      const result = spawnSync('ffsubsync', args, {
+        encoding: 'utf-8',
+        maxBuffer: 50 * 1024 * 1024,
+      });
+
+      if (result.error) {
+        errors.push({ movie, error: result.error.message });
+        continue;
+      }
+
+      if (result.status !== 0) {
+        errors.push({
+          movie,
+          error: result.stderr || result.stdout || 'ffsubsync failed',
+        });
+        continue;
+      }
+
+      // -----------------------------
+      // Extract ffsubsync score
+      // -----------------------------
+      const scoreMatch = result.stdout.match(/score:\s*([0-9.]+)/i);
+      const rawScore = scoreMatch ? parseFloat(scoreMatch[1]) : null;
+
+      const subCount = countLines(inSub);
+      const normScore = rawScore && subCount ? rawScore / subCount : null;
+
+      results.push({
+        movie,
+        ok: true,
+        raw_score: rawScore,
+        normalized_score: normScore,
+        output: result.stdout,
+      });
+    } catch (err) {
+      errors.push({ movie, error: err.message });
+    }
+  }
+
+  res.json({ ok: true, results, errors });
 });
 
 app.post('/api/analyze', (req, res) => {

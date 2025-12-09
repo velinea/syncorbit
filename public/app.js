@@ -25,6 +25,8 @@ const libraryCanvas = document.getElementById('libraryGraph');
 const autoCorrectBtn = document.getElementById('autoCorrectBtn');
 const autoCorrectResult = document.getElementById('autoCorrectResult');
 const bulkBtn = document.getElementById('bulkActionsBtn');
+const bulkResultBox = document.getElementById('bulkResultBox');
+const bulkResultPre = document.getElementById('bulkResultPre');
 
 // Tabs
 const tabButtons = document.querySelectorAll('#tabs button');
@@ -622,6 +624,55 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   });
 
   const out = await res.json();
+  // -------------------------------
+  // Display ffsubsync results
+  // -------------------------------
+  if (action === 'ffsubsync') {
+    bulkResultBox.style.display = 'block';
+
+    if (!result.ok) {
+      bulkResultPre.textContent =
+        'FFSUBSYNC ERROR:\n' + JSON.stringify(result, null, 2);
+      return;
+    }
+
+    let out = 'FFSUBSYNC RESULTS:\n\n';
+
+    // results from server
+    if (Array.isArray(result.results)) {
+      for (const r of result.results) {
+        out += `--- ${r.movie} ---\n`;
+
+        if (r.raw_score != null) {
+          out += `  raw score: ${r.raw_score}\n`;
+        } else {
+          out += `  raw score: (none)\n`;
+        }
+
+        if (r.normalized_score != null) {
+          out += `  normalized: ${r.normalized_score.toFixed(2)}\n`;
+        }
+
+        if (r.output) {
+          out += '\n' + r.output.trim() + '\n';
+        }
+
+        out += '\n';
+      }
+    }
+
+    // errors from server
+    if (Array.isArray(result.errors) && result.errors.length > 0) {
+      out += 'ERRORS:\n';
+      for (const e of result.errors) {
+        out += `  ${e.movie}: ${e.error}\n`;
+      }
+    }
+
+    bulkResultPre.textContent = out;
+    return; // prevent falling through
+  }
+
   alert('Done:\n' + JSON.stringify(out, null, 2));
 
   document.getElementById('bulkModal').style.display = 'none';

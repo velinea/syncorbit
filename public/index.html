@@ -31,6 +31,7 @@
           <div class="library-controls">
             <button id="bulkActionsBtn" disabled class="bulk-btn">Bulk Actions</button>
 
+            <!-- Bulk Action Modal -->
             <div id="bulkModal">
               <div id="bulkModalText" style="white-space: pre-line"></div>
 
@@ -46,11 +47,22 @@
                 <label
                   ><input type="radio" name="bulkAction" value="ignore" /> Ignore
                   selected movie folders</label
-                >
+                ><br />
                 <label
                   ><input type="radio" name="bulkAction" value="ffsubsync" /> ffsubsync
                   EN subtitle (save to /app/data/resync)</label
                 ><br />
+              </div>
+              <!-- Bulk Action Results -->
+              <div
+                id="bulkResultBox"
+                class="card"
+                style="display: none; margin-top: 20px"
+              >
+                <h2>Bulk Operation Output</h2>
+                <pre id="bulkResultPre">
+                  (no output)
+                </pre>
               </div>
 
               <div style="margin-top: 15px">

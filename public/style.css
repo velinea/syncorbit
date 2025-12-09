@@ -238,6 +238,16 @@ button:disabled {
   margin-top: 10px;
 }
 
+.bulkResultPre {
+  white-space: pre-wrap;
+  background: #020617;
+  border: 1px solid #374151;
+  padding: 10px;
+  border-radius: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
 .library-limit-label {
   font-size: 14px;
   color: #e5e7eb;
