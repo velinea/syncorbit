@@ -28,51 +28,57 @@ function saveIgnoreList(list) {
   fs.writeFileSync(IGNORE_FILE, JSON.stringify(list, null, 2));
 }
 
-app.post('/api/bulk/touch', express.json(), async (req, res) => {
-  const movies = req.body.movies || [];
-  let count = 0;
+app.post('/api/bulk/touch', express.json(), (req, res) => {
+  const movies = req.body.movies;
+  if (!Array.isArray(movies)) return res.json({ error: 'Invalid request' });
 
-  for (const movie of movies) {
-    const mediaDir = path.join(MEDIA, movie);
-    const dataRef = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
+  const results = [];
 
-    // Touch whisper ref
-    if (fs.existsSync(dataRef)) {
-      fs.utimesSync(dataRef, new Date(), new Date());
-    }
+  movies.forEach(movie => {
+    try {
+      const movieDir = path.join(ROOT, movie);
 
-    // Touch subtitles inside media
-    if (fs.existsSync(mediaDir)) {
-      const files = fs.readdirSync(mediaDir);
-
-      for (const f of files) {
-        if (f.toLowerCase().endsWith('.srt')) {
-          const p = path.join(mediaDir, f);
-          fs.utimesSync(p, new Date(), new Date());
-        }
+      if (!fs.existsSync(movieDir)) {
+        results.push({ movie, error: 'Movie folder not found' });
+        return;
       }
+
+      // Write harmless metadata to /app/data/touch/<movie>.touch
+      const touchPath = path.join(DATAROOT, 'touch', `${movie}.touch`);
+      fs.mkdirSync(path.dirname(touchPath), { recursive: true });
+      fs.writeFileSync(touchPath, Date.now().toString());
+
+      results.push({ movie, ok: true });
+    } catch (e) {
+      results.push({ movie, error: e.message });
     }
+  });
 
-    count++;
-  }
-
-  res.json({ ok: true, processed: count });
+  res.json({ ok: true, results });
 });
 
-app.post('/api/bulk/delete_ref', express.json(), async (req, res) => {
-  const movies = req.body.movies || [];
-  let removed = 0;
+app.post('/api/bulk/delete_ref', express.json(), (req, res) => {
+  const movies = req.body.movies;
+  if (!Array.isArray(movies)) return res.json({ error: 'Invalid request' });
 
-  for (const movie of movies) {
-    const refPath = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
+  const results = [];
 
-    if (fs.existsSync(refPath)) {
-      fs.unlinkSync(refPath);
-      removed++;
+  movies.forEach(movie => {
+    try {
+      const refFile = path.join(DATAROOT, 'ref', movie, 'ref.srt');
+
+      if (fs.existsSync(refFile)) {
+        fs.unlinkSync(refFile);
+        results.push({ movie, ok: true });
+      } else {
+        results.push({ movie, skipped: 'no ref.srt' });
+      }
+    } catch (e) {
+      results.push({ movie, error: e.message });
     }
-  }
+  });
 
-  res.json({ ok: true, removed });
+  res.json({ ok: true, results });
 });
 
 app.post('/api/bulk/ignore', express.json(), async (req, res) => {
