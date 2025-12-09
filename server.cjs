@@ -6,9 +6,6 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 
-// Load environment variables if needed
-require('dotenv').config();
-
 const app = express();
 const MEDIA_ROOT = '/app/media';
 const DATA_ROOT = '/app/data';
