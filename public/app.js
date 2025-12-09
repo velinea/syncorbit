@@ -475,6 +475,9 @@ function renderLibraryTable() {
       : '';
 
     tr.innerHTML = `
+      <td><input type="checkbox"
+      class="row-check"
+      data-movie="${r.movie}"></td>
       <td>${shortTitle(r.movie)} ${whisperBadge}</td>
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
@@ -560,6 +563,16 @@ async function openLibraryAnalysis(row) {
     currentLibraryAnalysis = null;
     if (autoCorrectBtn) autoCorrectBtn.disabled = true;
   }
+}
+document.addEventListener('change', e => {
+  if (e.target.classList.contains('row-check')) {
+    updateSelectionState();
+  }
+});
+
+function updateSelectionState() {
+  const selected = document.querySelectorAll('.row-check:checked').length;
+  console.log('Selected rows:', selected);
 }
 
 // -------- INITIAL SETUP --------
