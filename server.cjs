@@ -5,6 +5,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
+const { exec } = require('child_process');
 
 const app = express();
 const MEDIA_ROOT = '/app/media';
