@@ -1,8 +1,15 @@
-import express from 'express';
-import { spawn } from 'child_process';
-import path from 'path';
-import fs from 'fs';
-import { exec } from 'child_process';
+// server.cjs (CommonJS mode)
+// All require() calls now legal and ExecJS-compatible
+
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const { spawn, spawnSync } = require('child_process');
+const compression = require('compression');
+const cors = require('cors');
+
+// Load environment variables if needed
+require('dotenv').config();
 
 const app = express();
 const MEDIA_ROOT = '/app/media';
@@ -12,6 +19,13 @@ const IGNORE_FILE = path.join(
   process.env.SYNCORBIT_DATA || '/app/data',
   'ignore_list.json'
 );
+// Ensure PATH & EXECJS runtime preference are correct for ffsubsync + PyExecJS
+process.env.EXECJS_RUNTIME = 'Node';
+// Force system node (CJS) to appear first in PATH
+process.env.PATH = '/usr/bin:/usr/local/bin:/app/.venv/bin:' + process.env.PATH;
+
+console.log('Using PATH:', process.env.PATH);
+console.log('EXECJS_RUNTIME:', process.env.EXECJS_RUNTIME);
 
 app.use(express.json());
 app.use(express.static('public'));
@@ -95,7 +109,7 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
   res.json({ ok: true, total: ignoreList.length });
 });
 
-app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
+app.post('/api/bulk/ffsubsync', async (req, res) => {
   const movies = req.body.movies || [];
   const results = [];
   const errors = [];
@@ -104,36 +118,39 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
     try {
       const movieDir = path.join(MEDIA_ROOT, movie);
 
-      // Find video file
+      // locate video
       const video = fs.readdirSync(movieDir).find(f => /\.(mp4|mkv|avi|mov)$/i.test(f));
       if (!video) {
-        errors.push({ movie, error: 'No video found' });
+        errors.push({ movie, error: 'No video file found' });
         continue;
       }
 
-      // Find EN subtitle
+      // English subtitle
       const enSub = fs.readdirSync(movieDir).find(f => /\.en\.srt$/i.test(f));
       if (!enSub) {
         errors.push({ movie, error: 'No EN subtitle found' });
         continue;
       }
 
-      // Input paths
       const inVideo = path.join(movieDir, video);
       const inSub = path.join(movieDir, enSub);
 
-      // Output folder in /app/data/resync/<movie>
       const outDir = path.join(DATA_ROOT, 'resync', movie);
       fs.mkdirSync(outDir, { recursive: true });
 
-      // Output filename = same name + ".synced.srt"
       const outSub = path.join(outDir, enSub.replace(/\.srt$/i, '.synced.srt'));
 
-      // --- Run ffsubsync ---
-      const { spawnSync } = require('child_process');
-      const result = spawnSync('ffsubsync', [inVideo, '-i', inSub, '-o', outSub], {
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024 * 10,
+      // --- IMPORTANT: use absolute ffsubsync CLI from venv ---
+      const ffbin = '/app/.venv/bin/ffsubsync';
+
+      const result = spawnSync(ffbin, [inVideo, '-i', inSub, '-o', outSub], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          LANG: 'C.UTF-8',
+          LC_ALL: 'C.UTF-8',
+        },
       });
 
       if (result.status !== 0) {
@@ -144,18 +161,10 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
         continue;
       }
 
-      // Extract ffsubsync score if present
-      let rawScore = null;
-      const match = result.stdout.match(/score\s*=\s*([0-9.\-e+]+)/i);
-      if (match) rawScore = parseFloat(match[1]);
-
       results.push({
         movie,
-        inVideo,
-        inSub,
-        outSub,
-        raw_score: rawScore,
-        output: result.stdout,
+        output: outSub,
+        logs: result.stderr,
       });
     } catch (err) {
       errors.push({ movie, error: String(err) });

@@ -2,13 +2,12 @@
   "dependencies": {
     "express": "^5.1.0"
   },
-  "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.cjs"
   },
   "name": "syncorbit",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "server.cjs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/velinea/syncorbit.git"
