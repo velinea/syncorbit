@@ -105,42 +105,64 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
   res.json({ ok: true, total: ignoreList.length });
 });
 
-app.post('/api/bulk/ffsubsync', async (req, res) => {
+app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
   const movies = req.body.movies || [];
   const results = [];
   const errors = [];
+
+  function countLines(filePath) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      return content.split(/\r?\n/).filter(x => x.trim().length > 0).length;
+    } catch {
+      return null;
+    }
+  }
 
   for (const movie of movies) {
     try {
       const movieDir = path.join(MEDIA_ROOT, movie);
 
-      // locate video
+      // ----------------------------
+      // Locate video
+      // ----------------------------
       const video = fs.readdirSync(movieDir).find(f => /\.(mp4|mkv|avi|mov)$/i.test(f));
       if (!video) {
         errors.push({ movie, error: 'No video file found' });
         continue;
       }
+      const inVideo = path.join(movieDir, video);
 
-      // English subtitle
-      const enSub = fs.readdirSync(movieDir).find(f => /\.en\.srt$/i.test(f));
-      if (!enSub) {
+      // ----------------------------
+      // Locate EN subtitle
+      // ----------------------------
+      const sub = fs
+        .readdirSync(movieDir)
+        .find(f => /\.en\.srt$/i.test(f) || /\.eng\.srt$/i.test(f));
+      if (!sub) {
         errors.push({ movie, error: 'No EN subtitle found' });
         continue;
       }
+      const inSub = path.join(movieDir, sub);
 
-      const inVideo = path.join(movieDir, video);
-      const inSub = path.join(movieDir, enSub);
-
+      // ----------------------------
+      // Output path
+      // ----------------------------
       const outDir = path.join(DATA_ROOT, 'resync', movie);
       fs.mkdirSync(outDir, { recursive: true });
 
-      const outSub = path.join(outDir, enSub.replace(/\.srt$/i, '.synced.srt'));
+      const base = path.basename(inSub).replace(/\.srt$/i, '');
+      const outSub = path.join(outDir, base + '.synced.srt');
 
-      // --- IMPORTANT: use absolute ffsubsync CLI from venv ---
+      console.log('Running ffsubsync:', { inVideo, inSub });
+
+      // ----------------------------
+      // Spawn ffsubsync
+      // ----------------------------
       const ffbin = '/app/.venv/bin/ffsubsync';
-
       const result = spawnSync(ffbin, [inVideo, '-i', inSub, '-o', outSub], {
         encoding: 'utf8',
+        maxBuffer: 50 * 1024 * 1024,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
@@ -149,21 +171,41 @@ app.post('/api/bulk/ffsubsync', async (req, res) => {
         },
       });
 
+      if (result.error) {
+        errors.push({ movie, error: result.error.message });
+        continue;
+      }
+
       if (result.status !== 0) {
         errors.push({
           movie,
-          error: result.stderr || 'ffsubsync failed',
+          error: result.stderr || result.stdout || 'ffsubsync failed',
         });
         continue;
       }
 
+      // ----------------------------
+      // Extract raw score (stderr!)
+      // ----------------------------
+      const stderr = result.stderr || '';
+      const scoreMatch = stderr.match(/score:\s*([0-9.]+)/i);
+
+      const rawScore = scoreMatch ? parseFloat(scoreMatch[1]) : null;
+      const lineCount = countLines(inSub);
+      const normScore = rawScore && lineCount ? rawScore / lineCount : null;
+
       results.push({
         movie,
-        output: outSub,
-        logs: result.stderr,
+        ok: true,
+        inVideo,
+        inSub,
+        outSub,
+        rawScore,
+        normalizedScore: normScore,
+        logs: stderr,
       });
     } catch (err) {
-      errors.push({ movie, error: String(err) });
+      errors.push({ movie, error: err.message });
     }
   }
 
