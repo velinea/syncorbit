@@ -306,8 +306,8 @@ app.post('/api/align', (req, res) => {
   if (!reference || !target) {
     return res.status(400).json({ error: 'reference and target paths required' });
   }
-
-  const py = spawn('python3', ['python/align.py', reference, target]);
+  const PY = '/app/.venv/bin/python3';
+  const py = spawn(PY, ['python/align.py', reference, target]);
 
   let out = '';
   let errBuf = '';

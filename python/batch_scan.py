@@ -30,7 +30,8 @@ RESYNC_ROOT = DATA_ROOT / "resync"
 SUMMARY_CSV = DATA_ROOT / "syncorbit_library_summary.csv"
 IGNORE_FILE = DATA_ROOT / "ignore_list.json"
 
-ALIGN_PY = "python/align.py"
+PY = "/app/.venv/bin/python3"
+ALIGN_PY = "/app/python/align.py"
 
 # ----------------------------
 # Helpers
@@ -122,7 +123,7 @@ def find_en_fi_pair(folder: Path):
 
 def run_align(ref: Path, tgt: Path):
     """Run align.py and parse JSON result."""
-    cmd = ["python3", ALIGN_PY, str(ref), str(tgt)]
+    cmd = [PY, ALIGN_PY, str(ref), str(tgt)]
     out = subprocess.run(cmd, capture_output=True, text=True)
 
     if out.returncode != 0:
