@@ -196,6 +196,19 @@ def main():
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
         whisper_ref_path = REF_ROOT / movie / "ref.srt"
 
+        scores = load_scores(movie)
+
+        # --- ffsubsync reference (if scored) ---
+        ffsync_path = None
+        if "ffsubsync_en" in scores:
+            ffsync_path = Path(scores["ffsubsync_en"]["path"])
+
+        # --- whisper reference ---
+        whisper_exists = whisper_ref_path.exists()
+
+        # --- decide which one to use ---
+        decision = choose_reference(movie, whisper_exists, ffsync_path, None)
+
         ref = None
         tgt = None
         use_whisper = False
@@ -204,21 +217,15 @@ def main():
         # Reference choice section (NEW)
         # --------------------------------------------------
 
-        resync_ref_path = RESYNC_ROOT / movie / "en.resync.srt"
-        whisper_exists = whisper_ref_path.exists()
-        decision = choose_reference(movie, whisper_exists, resync_ref_path, None)
-
-        ref = None
-        use_whisper = False
-
         if decision == "whisper" and whisper_exists:
             print(f"→ Choosing Whisper reference for {movie}")
             ref = whisper_ref_path
             use_whisper = True
 
-        elif decision == "ffsync" and resync_ref_path.exists():
-            print(f"→ Choosing ffsubsync EN reference for {movie}")
-            ref = resync_ref_path
+        # ffsubsync
+        elif decision == "ffsync" and ffsync_path and ffsync_path.exists():
+            ref = ffsync_path
+            print(f"→ Using ffsubsync EN reference for {movie}")
 
         else:
             print(f"→ Using fallback EN/FI pair for {movie}")
