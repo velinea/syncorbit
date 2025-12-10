@@ -222,7 +222,7 @@ button:disabled {
 #bulkModal {
   position: fixed;
   top: 30%;
-  left: 30%;
+  left: 50%;
   transform: translate(-50%, -50%);
   background: #222;
   border: 1px solid #666;
@@ -231,6 +231,7 @@ button:disabled {
   z-index: 2000;
   width: 680px;
   color: white;
+  max-height: 600px;
   overflow-y: auto;
 }
 

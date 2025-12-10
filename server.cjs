@@ -38,6 +38,38 @@ function saveIgnoreList(list) {
   fs.writeFileSync(IGNORE_FILE, JSON.stringify(list, null, 2));
 }
 
+function updateSyncInfoWithFfsync(movie, ffsyncData) {
+  const analysisDir = path.join(DATA_ROOT, 'analysis', movie);
+  const syncPath = path.join(analysisDir, 'analysis.syncinfo');
+
+  let info = {};
+  try {
+    if (fs.existsSync(syncPath)) {
+      info = JSON.parse(fs.readFileSync(syncPath, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Failed reading syncinfo:', err);
+  }
+
+  // Ensure containers exist
+  if (!info.ref_candidates) info.ref_candidates = {};
+
+  info.ref_candidates.ffsubsync_en = {
+    path: ffsyncData.outSub,
+    raw_score: ffsyncData.rawScore,
+    normalized_score: ffsyncData.normalizedScore,
+    offset_seconds: ffsyncData.offsetSeconds,
+  };
+
+  fs.mkdirSync(analysisDir, { recursive: true });
+
+  try {
+    fs.writeFileSync(syncPath, JSON.stringify(info, null, 2));
+  } catch (err) {
+    console.error('Failed writing syncinfo:', err);
+  }
+}
+
 app.post('/api/bulk/touch', express.json(), (req, res) => {
   const movies = req.body.movies;
   if (!Array.isArray(movies)) return res.json({ error: 'Invalid request' });
@@ -209,6 +241,12 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
         offsetSeconds,
         framerateFactor,
         log: stderr,
+      });
+      updateSyncInfoWithFfsync(movie, {
+        outSub,
+        rawScore,
+        normalizedScore,
+        offsetSeconds,
       });
     } catch (err) {
       errors.push({ movie, error: err.message });

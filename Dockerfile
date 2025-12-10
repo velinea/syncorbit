@@ -20,7 +20,7 @@ RUN python3 -m venv /app/.venv \
     && /app/.venv/bin/pip install --no-cache-dir -r python/requirements.txt
 
 ENV EXECJS_RUNTIME=Node
-ENV PATH="/usr/bin:/usr/local/bin:/app/.venv/bin:${PATH}"
+ENV PATH="/usr/bin:/usr/local/bin:/app/.venv/bin"
 ENV SYNCORBIT_DATA="/app/data"
 
 EXPOSE 5010
