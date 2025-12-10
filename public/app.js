@@ -27,6 +27,7 @@ const autoCorrectResult = document.getElementById('autoCorrectResult');
 const bulkBtn = document.getElementById('bulkActionsBtn');
 const bulkResultBox = document.getElementById('bulkResultBox');
 const bulkResultPre = document.getElementById('bulkResultPre');
+const bulkModal = document.getElementById('bulkModal');
 
 // Tabs
 const tabButtons = document.querySelectorAll('#tabs button');
@@ -586,7 +587,6 @@ function updateSelectionState() {
   }
 }
 bulkBtn.addEventListener('click', () => {
-  const modal = document.getElementById('bulkModal');
   const text = document.getElementById('bulkModalText');
 
   const selectedMovies = [...document.querySelectorAll('.row-check:checked')].map(
@@ -596,11 +596,14 @@ bulkBtn.addEventListener('click', () => {
   text.textContent = `Selected movies:\n${selectedMovies.join('\n')}`;
 
   currentBulkSelection = selectedMovies; // store for “Run” button
-  modal.style.display = 'block';
+  bulkModal.style.display = 'block';
 });
 
 document.getElementById('bulkModalClose').onclick = () => {
-  document.getElementById('bulkModal').style.display = 'none';
+  bulkModal.style.display = 'none';
+  bulkResultBox.style.display = 'none';
+  bulkResultPre.style.display = 'none';
+  bulkResultPre.textContent = '(no output)';
 };
 
 document.getElementById('bulkRunBtn').onclick = async () => {
