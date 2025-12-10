@@ -50,6 +50,52 @@ ignored = load_ignore_list()
 print(f"Ignored movies: {len(ignored)}")
 
 
+def load_scores(movie):
+    """Return dictionary with whisper + ffsubsync scores (if available)."""
+    analysis_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
+    if not analysis_path.exists():
+        return {}
+
+    try:
+        with open(analysis_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("ref_candidates", {})
+    except:
+        return {}
+
+
+def choose_reference(movie, whisper_exists, ffsync_path, en_fi_pair):
+    """
+    Decide which reference to use based on available metadata.
+    Priority:
+    1. Whisper if it exists AND has anchor_count > 200
+    2. FFSUBSYNC EN if normalized_score > 100
+    3. Else fallback to EN/FI pairing
+    """
+    scores = load_scores(movie)
+
+    # Whisper metrics
+    whisper_score = None
+    if "whisper_ref" in scores:
+        w = scores["whisper_ref"]
+        whisper_score = w.get("anchor_count", 0)
+
+    # FF sync metrics
+    ff_score = None
+    if "ffsubsync_en" in scores:
+        f = scores["ffsubsync_en"]
+        ff_score = f.get("normalized", 0)
+
+    # Decision logic
+    if whisper_exists and whisper_score and whisper_score > 200:
+        return "whisper"
+
+    if ffsync_path.exists() and ff_score and ff_score > 100:
+        return "ffsync"
+
+    return "fallback"
+
+
 def find_en_fi_pair(folder: Path):
     """
     Find English + Finnish subtitle pair INSIDE MEDIA folder (fallback mode).
@@ -149,51 +195,48 @@ def main():
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
         whisper_ref_path = REF_ROOT / movie / "ref.srt"
 
-        # --------------------------------------------------
-        # Determine subtitle pair (ref, tgt)
-        # --------------------------------------------------
         ref = None
         tgt = None
         use_whisper = False
 
-        # 1. Whisper reference exists?
-        if whisper_ref_path.exists():
+        # --------------------------------------------------
+        # Reference choice section (NEW)
+        # --------------------------------------------------
+
+        resync_ref_path = RESYNC_ROOT / movie / "en.resync.srt"
+        whisper_exists = whisper_ref_path.exists()
+        decision = choose_reference(movie, whisper_exists, resync_ref_path, None)
+
+        ref = None
+        use_whisper = False
+
+        if decision == "whisper" and whisper_exists:
+            print(f"→ Choosing Whisper reference for {movie}")
             ref = whisper_ref_path
             use_whisper = True
 
-            # Find FI subtitle as target
+        elif decision == "ffsync" and resync_ref_path.exists():
+            print(f"→ Choosing ffsubsync EN reference for {movie}")
+            ref = resync_ref_path
+
+        else:
+            print(f"→ Using fallback EN/FI pair for {movie}")
+            pair = find_en_fi_pair(folder)
+            if not pair:
+                print(f"→ No EN/FI pair found, skipping {movie}")
+                continue
+            ref, tgt = pair
+
+        # Find FI subtitle if needed
+        if ref is not None and tgt is None:
             for srt in folder.glob("*.srt"):
                 name = srt.stem.lower()
                 if name.endswith(("fi", "fin")):
                     tgt = srt
                     break
-
-            if not tgt:
+            if tgt is None:
+                print(f"→ No FI subtitle found for {movie}, skipping")
                 continue
-
-        # 2. No Whisper ref → try EN/FI pair inside media
-        else:
-            resync_ref_path = RESYNC_ROOT / movie / "en.resync.srt"
-
-            if resync_ref_path.exists():
-                ref = resync_ref_path
-                print(f"→ Using ffsubsync EN reference for {movie}")
-
-                # Find FI subtitle as target
-                for srt in folder.glob("*.srt"):
-                    n = srt.stem.lower()
-                    if n.endswith(("fi", "fin")):
-                        tgt = srt
-                        break
-
-                if not tgt:
-                    print(f"→ No FI subtitle found for {movie}, skipping")
-                    continue
-
-            pair = find_en_fi_pair(folder)
-            if not pair:
-                continue
-            ref, tgt = pair
 
         # --------------------------------------------------
         # Decide whether to reuse analysis or re-align
