@@ -85,7 +85,7 @@ def choose_reference(movie, whisper_exists, ffsync_path, en_fi_pair):
     ff_score = None
     if "ffsubsync_en" in scores:
         f = scores["ffsubsync_en"]
-        ff_score = f.get("normalized", 0)
+        ff_score = f.get("normalized_score", 0)
 
     # Decision logic
     if whisper_exists and whisper_score and whisper_score > 200:
