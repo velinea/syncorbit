@@ -222,15 +222,16 @@ button:disabled {
 #bulkModal {
   position: fixed;
   top: 30%;
-  left: 50%;
+  left: 30%;
   transform: translate(-50%, -50%);
   background: #222;
   border: 1px solid #666;
   padding: 20px;
   display: none;
   z-index: 2000;
-  width: 480px;
+  width: 680px;
   color: white;
+  overflow-y: auto;
 }
 
 #bulkModal button {

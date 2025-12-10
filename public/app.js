@@ -693,11 +693,6 @@ function renderFfsubsyncResults(results) {
           <strong>Offset (sec):</strong> ${r.offsetSeconds ?? 'N/A'}<br>
           <strong>Framerate factor:</strong> ${r.framerateFactor ?? 'N/A'}
         </div>
-
-        <pre class="text-xs bg-gray-900 p-2 rounded overflow-x-auto mb-2">
-${shortLog}
-        </pre>
-
         <details class="text-xs text-gray-500">
           <summary class="cursor-pointer">Show full log</summary>
           <pre class="bg-gray-900 p-2 mt-1 rounded overflow-x-auto whitespace-pre-wrap">
