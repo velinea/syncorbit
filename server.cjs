@@ -8,6 +8,7 @@ const { spawn, spawnSync } = require('child_process');
 const { exec } = require('child_process');
 
 const app = express();
+const PY = '/app/.venv/bin/python3';
 const MEDIA_ROOT = '/app/media';
 const DATA_ROOT = '/app/data';
 const WHISPER_ROOT = path.join(DATA_ROOT, 'ref');
@@ -260,7 +261,7 @@ app.post('/api/analyze', (req, res) => {
   const file = req.body.path;
   if (!file) return res.status(400).json({ error: 'no file' });
 
-  const py = spawn('python3', ['python/analyze.py', file]);
+  const py = spawn(PY, ['/app/python/analyze.py', file]);
   let out = '',
     err = '';
 
@@ -283,7 +284,7 @@ app.post('/api/compare', (req, res) => {
   const { base, ref } = req.body;
   if (!base || !ref) return res.status(400).json({ error: 'missing paths' });
 
-  const py = spawn('python3', ['python/analyze_pair.py', base, ref]);
+  const py = spawn(PY, ['/app/python/analyze_pair.py', base, ref]);
   let out = '',
     err = '';
   py.stdout.on('data', d => (out += d.toString()));
@@ -306,8 +307,7 @@ app.post('/api/align', (req, res) => {
   if (!reference || !target) {
     return res.status(400).json({ error: 'reference and target paths required' });
   }
-  const PY = '/app/.venv/bin/python3';
-  const py = spawn(PY, ['python/align.py', reference, target]);
+  const py = spawn(PY, ['/app/python/align.py', reference, target]);
 
   let out = '';
   let errBuf = '';
@@ -366,7 +366,7 @@ app.get('/api/searchsubs', (req, res) => {
 });
 
 app.post('/api/run-batch-scan', (req, res) => {
-  const py = spawn('python3', ['python/batch_scan.py'], {
+  const py = spawn(PY, ['/app/python/batch_scan.py'], {
     cwd: '/app',
   });
 

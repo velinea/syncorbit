@@ -3,3 +3,4 @@ node_modules
 subs
 syncorbit_library_summary.csv
 whisper.cpp
+pyproject.toml
