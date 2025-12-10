@@ -623,7 +623,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     body: JSON.stringify({ movies: currentBulkSelection }),
   });
 
-  const out = await res.json();
+  const result = await res.json();
   // -------------------------------
   // Display ffsubsync results
   // -------------------------------
@@ -649,7 +649,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
 };
 
 function renderFfsubsyncResults(results) {
-  const container = document.getElementById('bulkResultsContainer');
+  const container = document.getElementById('bulkResultsBox');
   container.innerHTML = '';
 
   results.forEach(r => {
