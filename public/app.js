@@ -479,7 +479,7 @@ function renderLibraryTable() {
       ? `<span class="whisper-tag">Whisper</span>`
       : '';
     const ffsubsyncBadge = r.ffsubsyncPath
-      ? `<span class="ffsubsync-tag">FFSUBSYNC</span>`
+      ? `<span class="ffsubsync-tag">FFsubsync</span>`
       : '';
 
     tr.innerHTML = `
