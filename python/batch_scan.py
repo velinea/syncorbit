@@ -84,14 +84,15 @@ def choose_reference(movie, whisper_exists, ffsync_path, en_fi_pair):
     # FF sync metrics
     ff_score = None
     if "ffsubsync_en" in scores:
-        f = scores["ffsubsync_en"]
-        ff_score = f.get("normalized_score", 0)
+        meta = scores["ffsubsync_en"]
+        ff_score = meta.get("normalized_score", 0)
 
     # Decision logic
     if whisper_exists and whisper_score and whisper_score > 200:
         return "whisper"
 
-    if ffsync_path.exists() and ff_score and ff_score > 100:
+    # prefer ffsubsync if valid and good score
+    if ffsync_path and ffsync_path.exists() and ff_score and ff_score > 30:
         return "ffsync"
 
     return "fallback"
