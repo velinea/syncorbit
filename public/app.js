@@ -636,40 +636,8 @@ document.getElementById('bulkRunBtn').onclick = async () => {
       return;
     }
 
-    let out = 'FFSUBSYNC RESULTS:\n\n';
+    renderFfsubsyncResults(result.results);
 
-    // results from server
-    if (Array.isArray(result.results)) {
-      for (const r of result.results) {
-        out += `--- ${r.movie} ---\n`;
-
-        if (r.raw_score != null) {
-          out += `  raw score: ${r.raw_score}\n`;
-        } else {
-          out += `  raw score: (none)\n`;
-        }
-
-        if (r.normalized_score != null) {
-          out += `  normalized: ${r.normalized_score.toFixed(2)}\n`;
-        }
-
-        if (r.output) {
-          out += '\n' + r.output.trim() + '\n';
-        }
-
-        out += '\n';
-      }
-    }
-
-    // errors from server
-    if (Array.isArray(result.errors) && result.errors.length > 0) {
-      out += 'ERRORS:\n';
-      for (const e of result.errors) {
-        out += `  ${e.movie}: ${e.error}\n`;
-      }
-    }
-
-    bulkResultPre.textContent = out;
     return; // prevent falling through
   }
 
@@ -679,6 +647,65 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   updateSelectionState();
   loadLibrary(); // refresh table
 };
+
+function renderFfsubsyncResults(results) {
+  const container = document.getElementById('bulkResultsContainer');
+  container.innerHTML = '';
+
+  results.forEach(r => {
+    const scoreColor =
+      r.normalizedScore == null
+        ? 'text-gray-400'
+        : r.normalizedScore < 50
+        ? 'text-red-400'
+        : r.normalizedScore < 200
+        ? 'text-yellow-400'
+        : 'text-green-400';
+
+    const shortLog = r.log
+      .split('\n')
+      .filter(
+        line =>
+          line.includes('extracting') ||
+          line.includes('detected encoding') ||
+          line.includes('computing align') ||
+          line.includes('done') ||
+          line.includes('score:')
+      )
+      .join('\n');
+
+    container.innerHTML += `
+      <div class="p-4 border-b border-gray-700">
+        <h3 class="text-lg font-bold mb-2">${r.movie}</h3>
+
+        <div class="text-sm text-gray-300 mb-2">
+          <strong>Input subtitle:</strong> ${r.inSub}<br>
+          <strong>Output subtitle:</strong> ${r.outSub}
+        </div>
+
+        <div class="text-sm mb-2">
+          <strong>Raw Score:</strong> <span>${r.rawScore ?? 'N/A'}</span><br>
+          <strong>Normalized:</strong> <span class="${scoreColor}">${
+      r.normalizedScore ?? 'N/A'
+    }</span><br>
+          <strong>Offset (sec):</strong> ${r.offsetSeconds ?? 'N/A'}<br>
+          <strong>Framerate factor:</strong> ${r.framerateFactor ?? 'N/A'}
+        </div>
+
+        <pre class="text-xs bg-gray-900 p-2 rounded overflow-x-auto mb-2">
+${shortLog}
+        </pre>
+
+        <details class="text-xs text-gray-500">
+          <summary class="cursor-pointer">Show full log</summary>
+          <pre class="bg-gray-900 p-2 mt-1 rounded overflow-x-auto whitespace-pre-wrap">
+${r.log}
+          </pre>
+        </details>
+      </div>
+    `;
+  });
+}
 
 // -------- INITIAL SETUP --------
 

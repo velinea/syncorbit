@@ -193,16 +193,22 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
       const rawScore = scoreMatch ? parseFloat(scoreMatch[1]) : null;
       const lineCount = countLines(inSub);
       const normScore = rawScore && lineCount ? rawScore / lineCount : null;
+      // Extract offset, framerate, etc
+      const offsetMatch = stderr.match(/offset seconds:\s*([0-9.\-]+)/i);
+      const frMatch = stderr.match(/framerate scale factor:\s*([0-9.\-]+)/i);
+
+      const offsetSeconds = offsetMatch ? parseFloat(offsetMatch[1]) : null;
+      const framerateFactor = frMatch ? parseFloat(frMatch[1]) : null;
 
       results.push({
         movie,
-        ok: true,
-        inVideo,
         inSub,
         outSub,
         rawScore,
         normalizedScore: normScore,
-        logs: stderr,
+        offsetSeconds,
+        framerateFactor,
+        log: stderr,
       });
     } catch (err) {
       errors.push({ movie, error: err.message });
