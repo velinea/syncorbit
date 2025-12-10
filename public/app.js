@@ -649,8 +649,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
 };
 
 function renderFfsubsyncResults(results) {
-  const container = document.getElementById('bulkResultsBox');
-  container.innerHTML = '';
+  bulkResultBox.innerHTML = '';
 
   results.forEach(r => {
     const scoreColor =
@@ -674,7 +673,7 @@ function renderFfsubsyncResults(results) {
       )
       .join('\n');
 
-    container.innerHTML += `
+    bulkResultBox.innerHTML += `
       <div class="p-4 border-b border-gray-700">
         <h3 class="text-lg font-bold mb-2">${r.movie}</h3>
 
