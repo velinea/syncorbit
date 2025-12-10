@@ -398,6 +398,7 @@ app.get('/api/library', (req, res) => {
 
   const analysisDir = path.join(dataDir, 'analysis');
   const refDir = path.join(dataDir, 'ref');
+  const resyncDir = path.join(dataDir, 'resync');
 
   function parseCSVLine(line) {
     const result = [];
@@ -437,6 +438,7 @@ app.get('/api/library', (req, res) => {
 
         const syncinfoPath = path.join(analysisDir, movie, 'analysis.syncinfo');
         const whisperRefPath = path.join(refDir, movie, 'ref.srt');
+        const ffsubsyncPath = path.join(resyncDir, movie);
 
         return {
           movie,
@@ -447,6 +449,7 @@ app.get('/api/library', (req, res) => {
           syncinfo_path: fs.existsSync(syncinfoPath) ? syncinfoPath : null,
           whisper_ref: fs.existsSync(whisperRefPath),
           whisper_ref_path: fs.existsSync(whisperRefPath) ? whisperRefPath : null,
+          ffsubsyncPath: fs.existsSync(ffsubsyncPath) ? ffsubsyncPath : null,
         };
       })
       .filter(Boolean);

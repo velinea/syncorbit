@@ -383,7 +383,7 @@ document.querySelectorAll('#libraryTable thead th[data-sort]').forEach(th => {
 });
 
 function shortTitle(t) {
-  return t.length > 25 ? t.slice(0, 17) + '…' : t;
+  return t.length > 30 ? t.slice(0, 27) + '…' : t;
 }
 
 function shortStatus(s) {
@@ -478,12 +478,15 @@ function renderLibraryTable() {
     const whisperBadge = r.whisper_ref
       ? `<span class="whisper-tag">Whisper</span>`
       : '';
+    const ffsubsyncBadge = r.ffsubsyncPath
+      ? `<span class="ffsubsync-tag">FFSUBSYNC</span>`
+      : '';
 
     tr.innerHTML = `
       <td><input type="checkbox"
       class="row-check"
       data-movie="${r.movie}"></td>
-      <td>${shortTitle(r.movie)} ${whisperBadge}</td>
+      <td>${shortTitle(r.movie)} ${whisperBadge}${ffsubsyncBadge}</td>
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
