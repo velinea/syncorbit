@@ -641,7 +641,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     return; // prevent falling through
   }
 
-  alert('Done:\n' + JSON.stringify(out, null, 2));
+  alert('Done:\n' + JSON.stringify(result, null, 2));
 
   document.getElementById('bulkModal').style.display = 'none';
   updateSelectionState();
