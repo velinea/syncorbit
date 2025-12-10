@@ -627,7 +627,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   // -------------------------------
   // Display ffsubsync results
   // -------------------------------
-  if (action === 'ffsubsync') {
+  if (action.value === 'ffsubsync') {
     bulkResultBox.style.display = 'block';
 
     if (!result.ok) {

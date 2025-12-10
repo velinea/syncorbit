@@ -5,7 +5,7 @@ WORKDIR /app
 
 # --- System deps for Python + build ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3-full python3-venv python3-dev build-essential ffmpeg \
+    python3-full python3-venv python3-dev build-essential ffmpeg vim \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Node deps ---

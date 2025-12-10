@@ -55,14 +55,16 @@
               </div>
               <!-- Bulk Action Results -->
               <div
-                id="bulkResultBox"
+                id="bulkResultsBox"
                 class="card"
                 style="display: none; margin-top: 20px"
               >
-                <h2>Bulk Operation Output</h2>
-                <pre id="bulkResultPre">
-                  (no output)
-                </pre>
+                <h2 class="text-xl font-bold mb-2">ffsubsync Results</h2>
+
+                <!-- Only used for legacy text output, not needed once ffsubsync works -->
+                <pre id="bulkResultPre" style="display: none"></pre>
+
+                <!-- Results appended here by renderFfsubsyncResults() -->
               </div>
 
               <div style="margin-top: 15px">
