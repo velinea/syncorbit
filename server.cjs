@@ -379,7 +379,7 @@ app.get('/api/library', (req, res) => {
     const csvPath = path.join(dataDir, 'syncorbit_library_summary.csv');
 
     if (!fs.existsSync(csvPath)) {
-      return res.json({ error: 'no_summary_file' });
+      return res.json({ ok: false, error: 'missing_summary_file' });
     }
 
     const analysisDir = path.join(dataDir, 'analysis');
@@ -408,64 +408,76 @@ app.get('/api/library', (req, res) => {
       return result;
     }
 
-    // --- Build fresh data ---
+    // Load CSV lines
     const raw = fs.readFileSync(csvPath, 'utf8').trim().split('\n').filter(Boolean);
 
-    const rows = raw
-      .map(line => {
-        const parts = parseCSVLine(line);
-        const movie = (parts[0] || '').replace(/^"|"$/g, '').trim();
-        if (!movie || movie.toLowerCase() === 'movie') return null;
+    const rows = [];
 
-        const anchor_count = Number(parts[1]);
-        const avg_offset = Number(parts[2]);
-        const drift_span = Number(parts[3]);
-        const decision = (parts[4] || 'unknown').trim().toLowerCase();
+    for (const line of raw) {
+      const parts = parseCSVLine(line);
 
-        const syncinfoPath = path.join(analysisDir, movie, 'analysis.syncinfo');
-        const whisperRefPath = path.join(refDir, movie, 'ref.srt');
-        const ffsubsyncPath = path.join(resyncDir, movie);
+      // Must have 5 columns
+      if (parts.length < 5) continue;
 
-        let best_reference = null;
-        let reference_path = null;
+      let movie = (parts[0] || '').replace(/^"|"$/g, '').trim();
 
-        try {
-          if (fs.existsSync(syncinfoPath)) {
-            const info = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
-            best_reference = info.best_reference || null;
-            reference_path = info.reference_path || null;
-          }
-        } catch (err) {
-          console.error(`Error reading syncinfo for ${movie}:`, err);
+      // Skip header row
+      if (movie.toLowerCase() === 'movie') continue;
+      if (!movie) continue;
+
+      const anchor_count = Number(parts[1]);
+      const avg_offset = Number(parts[2]);
+      const drift_span = Number(parts[3]);
+      const decision = (parts[4] || 'unknown').trim().toLowerCase();
+
+      // If any numeric field is NaN, skip row
+      if (isNaN(anchor_count) || isNaN(avg_offset) || isNaN(drift_span)) {
+        console.warn('Skipping malformed row:', line);
+        continue;
+      }
+
+      // Paths
+      const syncinfoPath = path.join(analysisDir, movie, 'analysis.syncinfo');
+      const whisperRefPath = path.join(refDir, movie, 'ref.srt');
+      const ffsubsyncPath = path.join(resyncDir, movie);
+
+      let best_reference = null;
+      let reference_path = null;
+
+      try {
+        if (fs.existsSync(syncinfoPath)) {
+          const info = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
+          best_reference = info.best_reference ?? null;
+          reference_path = info.reference_path ?? null;
         }
+      } catch (err) {
+        console.error(`Error reading syncinfo for ${movie}:`, err);
+      }
 
-        return {
-          movie,
-          anchor_count,
-          avg_offset,
-          drift_span,
-          decision,
+      rows.push({
+        movie,
+        anchor_count,
+        avg_offset,
+        drift_span,
+        decision,
 
-          syncinfo_path: fs.existsSync(syncinfoPath) ? syncinfoPath : null,
-          whisper_ref: fs.existsSync(whisperRefPath),
-          whisper_ref_path: fs.existsSync(whisperRefPath) ? whisperRefPath : null,
-          ffsubsyncPath: fs.existsSync(ffsubsyncPath) ? ffsubsyncPath : null,
+        syncinfo_path: fs.existsSync(syncinfoPath) ? syncinfoPath : null,
+        whisper_ref: fs.existsSync(whisperRefPath),
+        whisper_ref_path: fs.existsSync(whisperRefPath) ? whisperRefPath : null,
+        ffsubsyncPath: fs.existsSync(ffsubsyncPath) ? ffsubsyncPath : null,
 
-          // New UI fields
-          best_reference,
-          reference_path,
-        };
-      })
-      .filter(Boolean);
+        best_reference,
+        reference_path,
+      });
+    }
 
-    // --- Save to cache ---
     libraryCache = { ok: true, rows };
     libraryCacheTime = now;
 
-    res.json(libraryCache);
+    return res.json(libraryCache);
   } catch (e) {
-    console.error(e);
-    res.json({ ok: false, error: e.toString() });
+    console.error('Library API error:', e);
+    return res.json({ ok: false, error: e.toString() });
   }
 });
 
