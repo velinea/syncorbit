@@ -71,59 +71,6 @@ function updateSyncInfoWithFfsync(movie, ffsyncData) {
   }
 }
 
-app.post('/api/bulk/touch', express.json(), (req, res) => {
-  const movies = req.body.movies;
-  if (!Array.isArray(movies)) return res.json({ error: 'Invalid request' });
-
-  const results = [];
-
-  movies.forEach(movie => {
-    try {
-      const movieDir = path.join(MEDIA_ROOT, movie);
-
-      if (!fs.existsSync(movieDir)) {
-        results.push({ movie, error: 'Movie folder not found' });
-        return;
-      }
-
-      // Write harmless metadata to /app/data/touch/<movie>.touch
-      const touchPath = path.join(DATA_ROOT, 'touch', `${movie}.touch`);
-      fs.mkdirSync(path.dirname(touchPath), { recursive: true });
-      fs.writeFileSync(touchPath, Date.now().toString());
-
-      results.push({ movie, ok: true });
-    } catch (e) {
-      results.push({ movie, error: e.message });
-    }
-  });
-
-  res.json({ ok: true, results });
-});
-
-app.post('/api/bulk/delete_ref', express.json(), (req, res) => {
-  const movies = req.body.movies;
-  if (!Array.isArray(movies)) return res.json({ error: 'Invalid request' });
-
-  const results = [];
-
-  movies.forEach(movie => {
-    try {
-      const refFile = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
-
-      if (fs.existsSync(refFile)) {
-        fs.unlinkSync(refFile);
-        results.push({ movie, ok: true });
-      } else {
-        results.push({ movie, skipped: 'no ref.srt' });
-      }
-    } catch (e) {
-      results.push({ movie, error: e.message });
-    }
-  });
-
-  res.json({ ok: true, results });
-});
-
 app.post('/api/bulk/ignore', express.json(), async (req, res) => {
   const movies = req.body.movies || [];
   let ignoreList = loadIgnoreList();
@@ -136,6 +83,32 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
 
   saveIgnoreList(ignoreList);
   res.json({ ok: true, total: ignoreList.length });
+});
+
+app.post('/api/bulk/touch_whisper', express.json(), (req, res) => {
+  const movies = req.body.movies || [];
+  const results = [];
+  const errors = [];
+
+  for (const movie of movies) {
+    try {
+      const refPath = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
+
+      if (!fs.existsSync(refPath)) {
+        errors.push({ movie, error: 'Whisper reference missing' });
+        continue;
+      }
+
+      const now = new Date();
+      fs.utimesSync(refPath, now, now); // update atime + mtime
+
+      results.push({ movie, ok: true, updated: refPath });
+    } catch (err) {
+      errors.push({ movie, error: String(err) });
+    }
+  }
+
+  res.json({ ok: true, results, errors });
 });
 
 app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {

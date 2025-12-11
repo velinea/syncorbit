@@ -492,7 +492,7 @@ function renderLibraryTable() {
     tr.innerHTML = `
       <td><input type="checkbox"
       class="row-check"
-      data-movie="${r.movie}">onclick="event.stopPropagation()"></td>
+      data-movie="${r.movie}" onclick="event.stopPropagation()"></td>
       <td>${shortTitle(r.movie)} ${refBadge}</td>
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
@@ -624,8 +624,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   }
 
   const endpoint = {
-    touch: '/api/bulk/touch',
-    delete_ref: '/api/bulk/delete_ref',
+    touch_whisper: '/api/bulk/touch_whisper',
     ignore: '/api/bulk/ignore',
     ffsubsync: '/api/bulk/ffsubsync',
   }[action.value];
