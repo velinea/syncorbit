@@ -671,6 +671,12 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   } finally {
     enableBulkUI(); // <--- always re-enable afterward
     hideSpinner();
+    // Uncheck all selections
+    document.querySelectorAll('.row-check:checked').forEach(cb => (cb.checked = false));
+
+    // Reset selection state
+    updateSelectionState();
+
     return; // prevent falling through
   }
 
