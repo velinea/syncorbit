@@ -262,9 +262,8 @@ async function loadSubtitleChoices(movieName) {
 
   // Subs
   data.subs.forEach(s => {
-    const label = `${s.file} [${s.lang}]`;
-    refSelect.innerHTML += `<option value="${s.path}">${label}</option>`;
-    targetSelect.innerHTML += `<option value="${s.path}">${label}</option>`;
+    refSelect.innerHTML += `<option value="${s.path}">${s.file}</option>`;
+    targetSelect.innerHTML += `<option value="${s.path}">${s.file}</option>`;
   });
 
   // Enable Align on change

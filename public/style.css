@@ -274,11 +274,16 @@ button:disabled {
 
 #bulkResultBtn {
   margin-top: 10px;
-  background: #0074d9;
   display: flex;
   justify-content: space-between;
 }
-#bulkResultBtn:hover {
+
+#bulkResultBtn button {
+  color: white;
+  background: #0074d9;
+}
+
+#bulkResultBtn button:hover {
   background: #005bb5;
 }
 
