@@ -492,7 +492,7 @@ function renderLibraryTable() {
     tr.innerHTML = `
       <td><input type="checkbox"
       class="row-check"
-      data-movie="${r.movie}"></td>
+      data-movie="${r.movie}">onclick="event.stopPropagation()"></td>
       <td>${shortTitle(r.movie)} ${refBadge}</td>
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>

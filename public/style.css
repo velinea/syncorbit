@@ -221,17 +221,25 @@ button:disabled {
 
 #bulkModal {
   position: fixed;
-  top: 30%;
+  top: 50%; /* center vertically */
   left: 50%;
   transform: translate(-50%, -50%);
+
   background: #222;
   border: 1px solid #666;
   padding: 20px;
+
   display: none;
   z-index: 2000;
   width: 680px;
   color: white;
-  max-height: 600px;
+
+  max-height: 90vh; /* never taller than screen */
+  overflow-y: auto; /* scroll internally */
+}
+
+#bulkResultBox {
+  max-height: 60vh;
   overflow-y: auto;
 }
 
