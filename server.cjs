@@ -375,6 +375,39 @@ app.get('/api/library', (req, res) => {
       return res.json(libraryCache);
     }
 
+    const dataDir = process.env.SYNCORBIT_DATA || '/app/data';
+    const csvPath = path.join(dataDir, 'syncorbit_library_summary.csv');
+
+    if (!fs.existsSync(csvPath)) {
+      return res.json({ error: 'no_summary_file' });
+    }
+
+    const analysisDir = path.join(dataDir, 'analysis');
+    const refDir = path.join(dataDir, 'ref');
+    const resyncDir = path.join(dataDir, 'resync');
+
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let insideQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          insideQuotes = !insideQuotes;
+          continue;
+        }
+        if (c === ',' && !insideQuotes) {
+          result.push(current);
+          current = '';
+          continue;
+        }
+        current += c;
+      }
+      result.push(current);
+      return result;
+    }
+
     // --- Build fresh data ---
     const raw = fs.readFileSync(csvPath, 'utf8').trim().split('\n').filter(Boolean);
 
