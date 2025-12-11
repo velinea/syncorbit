@@ -422,42 +422,55 @@ app.get('/api/library', (req, res) => {
     return result;
   }
 
-  try {
-    const raw = fs.readFileSync(csvPath, 'utf8').trim().split('\n').filter(Boolean);
+  const rows = raw
+    .map(line => {
+      const parts = parseCSVLine(line);
+      const movie = (parts[0] || '').replace(/^"|"$/g, '').trim();
+      if (!movie || movie.toLowerCase() === 'movie') return null;
 
-    const rows = raw
-      .map(line => {
-        const parts = parseCSVLine(line);
-        const movie = (parts[0] || '').replace(/^"|"$/g, '').trim();
-        if (!movie || movie.toLowerCase() === 'movie') return null;
+      const anchor_count = Number(parts[1]);
+      const avg_offset = Number(parts[2]);
+      const drift_span = Number(parts[3]);
+      const decision = (parts[4] || 'unknown').trim().toLowerCase();
 
-        const anchor_count = Number(parts[1]);
-        const avg_offset = Number(parts[2]);
-        const drift_span = Number(parts[3]);
-        const decision = (parts[4] || 'unknown').trim().toLowerCase();
+      const syncinfoPath = path.join(analysisDir, movie, 'analysis.syncinfo');
+      const whisperRefPath = path.join(refDir, movie, 'ref.srt');
+      const ffsubsyncPath = path.join(resyncDir, movie);
 
-        const syncinfoPath = path.join(analysisDir, movie, 'analysis.syncinfo');
-        const whisperRefPath = path.join(refDir, movie, 'ref.srt');
-        const ffsubsyncPath = path.join(resyncDir, movie);
+      // --- NEW: read best_reference + reference_path from analysis.syncinfo ---
+      let best_reference = null;
+      let reference_path = null;
 
-        return {
-          movie,
-          anchor_count,
-          avg_offset,
-          drift_span,
-          decision,
-          syncinfo_path: fs.existsSync(syncinfoPath) ? syncinfoPath : null,
-          whisper_ref: fs.existsSync(whisperRefPath),
-          whisper_ref_path: fs.existsSync(whisperRefPath) ? whisperRefPath : null,
-          ffsubsyncPath: fs.existsSync(ffsubsyncPath) ? ffsubsyncPath : null,
-        };
-      })
-      .filter(Boolean);
+      try {
+        if (fs.existsSync(syncinfoPath)) {
+          const info = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
+          best_reference = info.best_reference || null;
+          reference_path = info.reference_path || null;
+        }
+      } catch (e) {
+        console.error(`Failed to read syncinfo for ${movie}:`, e);
+      }
 
-    res.json(rows);
-  } catch (e) {
-    res.status(500).json({ error: 'csv_read_failed', detail: String(e) });
-  }
+      return {
+        movie,
+        anchor_count,
+        avg_offset,
+        drift_span,
+        decision,
+
+        // existing fields
+        syncinfo_path: fs.existsSync(syncinfoPath) ? syncinfoPath : null,
+        whisper_ref: fs.existsSync(whisperRefPath),
+        whisper_ref_path: fs.existsSync(whisperRefPath) ? whisperRefPath : null,
+        ffsubsyncPath: fs.existsSync(ffsubsyncPath) ? ffsubsyncPath : null,
+
+        // --- NEW fields used by UI badges ---
+        best_reference,
+        reference_path,
+      };
+    })
+    .filter(Boolean);
+  res.json({ rows });
 });
 
 app.get('/api/analysis/:movie', (req, res) => {

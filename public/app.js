@@ -475,18 +475,25 @@ function renderLibraryTable() {
         ? 'status-adjust'
         : 'status-bad';
 
-    const whisperBadge = r.whisper_ref
-      ? `<span class="whisper-tag">Whisper</span>`
-      : '';
-    const ffsubsyncBadge = r.ffsubsyncPath
-      ? `<span class="ffsubsync-tag">FFsubsync</span>`
-      : '';
+    let refBadge = '';
+
+    if (r.best_reference === 'whisper') {
+      refBadge = `<span class="ref-badge ref-whisper">Whisper</span>`;
+    } else if (r.best_reference === 'ffsync') {
+      refBadge = `<span class="ref-badge ref-ffsync">ffsync</span>`;
+    } else if (r.best_reference === 'en') {
+      refBadge = `<span class="ref-badge ref-en">EN</span>`;
+    }
+    if (r.reference_path) {
+      refBadge = `<span class="ref-badge ref-${r.best_reference}"
+        title="${r.reference_path}">${r.best_reference}</span>`;
+    }
 
     tr.innerHTML = `
       <td><input type="checkbox"
       class="row-check"
       data-movie="${r.movie}"></td>
-      <td>${shortTitle(r.movie)} ${whisperBadge}${ffsubsyncBadge}</td>
+      <td>${shortTitle(r.movie)} ${refBadge}</td>
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
