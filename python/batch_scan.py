@@ -65,60 +65,39 @@ def load_scores(movie):
         return {}
 
 
-def choose_reference(movie, whisper_exists, ffsync_path, en_fi_pair):
+def collect_reference_candidates(movie_folder, movie_name):
     """
-    Decide which reference to use based on available metadata.
-    Priority:
-    1. Whisper if it exists AND has anchor_count > 200
-    2. FFSUBSYNC EN if normalized_score > 100
-    3. Else fallback to EN/FI pairing
+    Return a list of (ref_type, Path) for whisper, ffsubsync, or EN references.
     """
-    scores = load_scores(movie)
 
-    # Whisper metrics
-    whisper_score = None
-    if "whisper_ref" in scores:
-        w = scores["whisper_ref"]
-        whisper_score = w.get("anchor_count", 0)
+    refs = []
 
-    # FF sync metrics
-    ff_score = None
-    if "ffsubsync_en" in scores:
-        meta = scores["ffsubsync_en"]
-        ff_score = meta.get("normalized_score", 0)
+    # Whisper reference
+    whisper_ref = REF_ROOT / movie_name / "ref.srt"
+    if whisper_ref.exists():
+        refs.append(("whisper", whisper_ref))
 
-    # Decision logic
-    if whisper_exists and whisper_score and whisper_score > 200:
-        return "whisper"
+    # ffsubsync references
+    resync_dir = RESYNC_ROOT / movie_name
+    if resync_dir.exists():
+        for srt in resync_dir.glob("*.synced.srt"):
+            refs.append(("ffsync", srt))
 
-    # prefer ffsubsync if valid and good score
-    if ffsync_path and ffsync_path.exists() and ff_score and ff_score > 30:
-        return "ffsync"
+    # EN references inside the media folder
+    for srt in movie_folder.glob("*.srt"):
+        stem = srt.stem.lower()
+        if stem.endswith(("en", "eng")):
+            refs.append(("en", srt))
+            break  # only need the first EN
 
-    return "fallback"
+    return refs
 
 
-def find_en_fi_pair(folder: Path):
-    """
-    Find English + Finnish subtitle pair INSIDE MEDIA folder (fallback mode).
-    """
-    subs = [f for f in folder.glob("*.srt")]
-    if len(subs) < 2:
-        return None
-
-    ref = None
-    tgt = None
-
-    for s in subs:
-        name = s.stem.lower()
-        if name.endswith(("en", "eng")):
-            ref = s
-        if name.endswith(("fi", "fin")):
-            tgt = s
-
-    if ref and tgt:
-        return ref, tgt
-
+def find_fi_sub(movie_folder):
+    for srt in movie_folder.glob("*.srt"):
+        name = srt.stem.lower()
+        if name.endswith(("fi", "fin")) or "finn" in name or "finnish" in name:
+            return srt
     return None
 
 
@@ -195,57 +174,22 @@ def main():
             continue
 
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
-        whisper_ref_path = REF_ROOT / movie / "ref.srt"
 
-        scores = load_scores(movie)
+        # 1) Collect all candidates
+        ref_candidates = collect_reference_candidates(folder, movie)
 
-        # --- ffsubsync reference (if scored) ---
-        ffsync_path = None
-        if "ffsubsync_en" in scores:
-            ffsync_path = Path(scores["ffsubsync_en"]["path"])
+        if not ref_candidates:
+            print(f"[SKIP] No reference candidates for {movie}")
+            continue
 
-        # --- whisper reference ---
-        whisper_exists = whisper_ref_path.exists()
+        # 2) Choose the newest reference
+        ref_type, ref = max(ref_candidates, key=lambda x: x[1].stat().st_mtime)
+        print(f"[INFO] {movie}: selected reference '{ref_type}' → {ref.name}")
 
-        # --- decide which one to use ---
-        decision = choose_reference(movie, whisper_exists, ffsync_path, None)
-
-        ref = None
-        tgt = None
-        use_whisper = False
-
-        # --------------------------------------------------
-        # Reference choice section (NEW)
-        # --------------------------------------------------
-
-        if decision == "whisper" and whisper_exists:
-            print(f"→ Choosing Whisper reference for {movie}")
-            ref = whisper_ref_path
-            use_whisper = True
-
-        # ffsubsync
-        elif decision == "ffsync" and ffsync_path and ffsync_path.exists():
-            ref = ffsync_path
-            print(f"→ Using ffsubsync EN reference for {movie}")
-
-        else:
-            print(f"→ Using fallback EN/FI pair for {movie}")
-            pair = find_en_fi_pair(folder)
-            if not pair:
-                print(f"→ No EN/FI pair found, skipping {movie}")
-                continue
-            ref, tgt = pair
-
-        # Find FI subtitle if needed
-        if ref is not None and tgt is None:
-            for srt in folder.glob("*.srt"):
-                name = srt.stem.lower()
-                if name.endswith(("fi", "fin")):
-                    tgt = srt
-                    break
-            if tgt is None:
-                print(f"→ No FI subtitle found for {movie}, skipping")
-                continue
+        tgt = find_fi_sub(folder)
+        if not tgt:
+            print(f"[SKIP] No FI subtitle found for {movie}")
+            continue
 
         # --------------------------------------------------
         # Decide whether to reuse analysis or re-align
@@ -255,23 +199,14 @@ def main():
         if not syncinfo_path.exists():
             analyze = True
         else:
-            try:
-                sync_mtime = syncinfo_path.stat().st_mtime
-                ref_mtime = ref.stat().st_mtime
-                tgt_mtime = tgt.stat().st_mtime
+            sync_mtime = syncinfo_path.stat().st_mtime
 
-                # Whisper reference fresher than analysis → reanalyze
-                if use_whisper and ref_mtime > sync_mtime:
-                    analyze = True
-
-                # Target subtitle fresher → reanalyze
-                elif tgt_mtime > sync_mtime or ref_mtime > sync_mtime:
-                    analyze = True
-
-            except OSError:
+            if ref.stat().st_mtime > sync_mtime:
+                analyze = True
+            elif tgt.stat().st_mtime > sync_mtime:
                 analyze = True
 
-        # --------------------------------------------------
+                # --------------------------------------------------
         # Case 1: reuse existing syncinfo
         # --------------------------------------------------
         if not analyze:
@@ -288,6 +223,8 @@ def main():
         # --------------------------------------------------
         try:
             data = run_align(ref, tgt)
+            data["best_reference"] = ref_type
+            data["reference_path"] = str(ref)
         except Exception as e:
             print(f"ERROR:", e)
             continue
