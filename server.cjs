@@ -32,6 +32,12 @@ let libraryCache = null;
 let libraryCacheTime = 0; // timestamp in ms
 const LIBRARY_CACHE_TTL = 5000; // 5 seconds
 
+function invalidateLibraryCache() {
+  libraryCache = null;
+  libraryCacheTime = 0;
+  console.log('→ Library cache invalidated');
+}
+
 function loadIgnoreList() {
   try {
     return JSON.parse(fs.readFileSync(IGNORE_FILE, 'utf8'));
@@ -87,6 +93,8 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
   }
 
   saveIgnoreList(ignoreList);
+  invalidateLibraryCache();
+
   res.json({ ok: true, total: ignoreList.length });
 });
 
@@ -112,6 +120,7 @@ app.post('/api/bulk/touch_whisper', express.json(), (req, res) => {
       errors.push({ movie, error: String(err) });
     }
   }
+  invalidateLibraryCache();
 
   res.json({ ok: true, results, errors });
 });
@@ -231,6 +240,7 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
       errors.push({ movie, error: err.message });
     }
   }
+  invalidateLibraryCache();
 
   res.json({ ok: true, results, errors });
 });
@@ -350,6 +360,7 @@ app.post('/api/run-batch-scan', (req, res) => {
 
   let out = '';
   let err = '';
+  invalidateLibraryCache();
 
   py.stdout.on('data', d => (out += d.toString()));
   py.stderr.on('data', d => (err += d.toString()));
@@ -471,10 +482,9 @@ app.get('/api/library', (req, res) => {
       });
     }
 
-    libraryCache = { ok: true, rows };
+    libraryCache = rows; // cache just the array
     libraryCacheTime = now;
-
-    return res.json(libraryCache);
+    res.json(rows); // UI wants an array as the root JSON value
   } catch (e) {
     console.error('Library API error:', e);
     return res.json({ ok: false, error: e.toString() });
