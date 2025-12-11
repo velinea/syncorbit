@@ -27,6 +27,11 @@ console.log('EXECJS_RUNTIME:', process.env.EXECJS_RUNTIME);
 app.use(express.json());
 app.use(express.static('public'));
 
+// --- Simple in-memory cache (lives until server restart) ---
+let libraryCache = null;
+let libraryCacheTime = 0; // timestamp in ms
+const LIBRARY_CACHE_TTL = 5000; // 5 seconds
+
 function loadIgnoreList() {
   try {
     return JSON.parse(fs.readFileSync(IGNORE_FILE, 'utf8'));
@@ -362,40 +367,15 @@ app.post('/api/run-batch-scan', (req, res) => {
 });
 
 app.get('/api/library', (req, res) => {
-  const dataDir = process.env.SYNCORBIT_DATA || '/app/data';
-  const csvPath = path.join(dataDir, 'syncorbit_library_summary.csv');
-
-  if (!fs.existsSync(csvPath)) {
-    return res.json({ error: 'no_summary_file' });
-  }
-
-  const analysisDir = path.join(dataDir, 'analysis');
-  const refDir = path.join(dataDir, 'ref');
-  const resyncDir = path.join(dataDir, 'resync');
-
-  function parseCSVLine(line) {
-    const result = [];
-    let current = '';
-    let insideQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        insideQuotes = !insideQuotes;
-        continue;
-      }
-      if (c === ',' && !insideQuotes) {
-        result.push(current);
-        current = '';
-        continue;
-      }
-      current += c;
-    }
-    result.push(current);
-    return result;
-  }
-
   try {
+    const now = Date.now();
+
+    // --- Return cached version if still valid ---
+    if (libraryCache && now - libraryCacheTime < LIBRARY_CACHE_TTL) {
+      return res.json(libraryCache);
+    }
+
+    // --- Build fresh data ---
     const raw = fs.readFileSync(csvPath, 'utf8').trim().split('\n').filter(Boolean);
 
     const rows = raw
@@ -413,7 +393,6 @@ app.get('/api/library', (req, res) => {
         const whisperRefPath = path.join(refDir, movie, 'ref.srt');
         const ffsubsyncPath = path.join(resyncDir, movie);
 
-        // --- NEW: read best_reference + reference_path from analysis.syncinfo ---
         let best_reference = null;
         let reference_path = null;
 
@@ -423,8 +402,8 @@ app.get('/api/library', (req, res) => {
             best_reference = info.best_reference || null;
             reference_path = info.reference_path || null;
           }
-        } catch (e) {
-          console.error(`Failed to read syncinfo for ${movie}:`, e);
+        } catch (err) {
+          console.error(`Error reading syncinfo for ${movie}:`, err);
         }
 
         return {
@@ -434,22 +413,26 @@ app.get('/api/library', (req, res) => {
           drift_span,
           decision,
 
-          // existing fields
           syncinfo_path: fs.existsSync(syncinfoPath) ? syncinfoPath : null,
           whisper_ref: fs.existsSync(whisperRefPath),
           whisper_ref_path: fs.existsSync(whisperRefPath) ? whisperRefPath : null,
           ffsubsyncPath: fs.existsSync(ffsubsyncPath) ? ffsubsyncPath : null,
 
-          // --- NEW fields used by UI badges ---
+          // New UI fields
           best_reference,
           reference_path,
         };
       })
       .filter(Boolean);
 
-    res.json(rows);
+    // --- Save to cache ---
+    libraryCache = { ok: true, rows };
+    libraryCacheTime = now;
+
+    res.json(libraryCache);
   } catch (e) {
-    res.status(500).json({ error: 'csv_read_failed', detail: String(e) });
+    console.error(e);
+    res.json({ ok: false, error: e.toString() });
   }
 });
 
