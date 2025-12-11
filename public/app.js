@@ -64,6 +64,24 @@ tabButtons.forEach(btn => {
 
 // -------- GENERIC HELPERS --------
 
+function showSpinner() {
+  document.getElementById('globalSpinner').style.display = 'flex';
+}
+
+function hideSpinner() {
+  document.getElementById('globalSpinner').style.display = 'none';
+}
+
+function disableBulkUI() {
+  document.getElementById('bulkRunBtn').disabled = true;
+  document.getElementById('bulkActionsBtn').disabled = true;
+}
+
+function enableBulkUI() {
+  document.getElementById('bulkRunBtn').disabled = false;
+  document.getElementById('bulkActionsBtn').disabled = false;
+}
+
 function clearCanvas(c) {
   if (!c) return;
   const ctx = c.getContext('2d');
@@ -617,39 +635,42 @@ document.getElementById('bulkModalClose').onclick = () => {
 };
 
 document.getElementById('bulkRunBtn').onclick = async () => {
-  const action = document.querySelector("input[name='bulkAction']:checked");
-  if (!action) {
-    alert('Choose an action first');
-    return;
-  }
-
-  const endpoint = {
-    touch_whisper: '/api/bulk/touch_whisper',
-    ignore: '/api/bulk/ignore',
-    ffsubsync: '/api/bulk/ffsubsync',
-  }[action.value];
-
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ movies: currentBulkSelection }),
-  });
-
-  const result = await res.json();
-  // -------------------------------
-  // Display ffsubsync results
-  // -------------------------------
-  if (action.value === 'ffsubsync') {
-    bulkResultBox.style.display = 'block';
-
-    if (!result.ok) {
-      bulkResultPre.textContent =
-        'FFSUBSYNC ERROR:\n' + JSON.stringify(result, null, 2);
+  disableBulkUI();
+  try {
+    const action = document.querySelector("input[name='bulkAction']:checked");
+    if (!action) {
+      enableBulkUI();
+      alert('Choose an action first');
       return;
     }
+    showSpinner();
 
-    renderFfsubsyncResults(result.results);
+    const endpoint = {
+      touch_whisper: '/api/bulk/touch_whisper',
+      ignore: '/api/bulk/ignore',
+      ffsubsync: '/api/bulk/ffsubsync',
+    }[action.value];
 
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ movies: currentBulkSelection }),
+    });
+
+    const result = await res.json();
+    // -------------------------------
+    // Display ffsubsync results
+    // -------------------------------
+    if (action.value === 'ffsubsync') {
+      bulkResultBox.style.display = 'block';
+      renderFfsubsyncResults(result.results);
+    } else {
+      alert('Done:\n' + JSON.stringify(result, null, 2));
+      document.getElementById('bulkModal').style.display = 'none';
+    }
+  } finally {
+    enableBulkUI(); // <--- always re-enable afterward
+    hideSpinner();
     return; // prevent falling through
   }
 
