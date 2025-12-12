@@ -533,9 +533,39 @@ function renderLibraryTable() {
       <td>${safe(r.drift_span)}</td>
       <td class="${statusClass}">${shortStatus(r.decision)}</td>
       <td><button class="reanalyze-btn" data-movie="${r.movie}">
-      Re-analyze
-      </button></td>
+      &#128472;</button>
+      <span class="reanalyze-status" data-movie="${r.movie}"></span>
+      </td>
     `;
+    document.querySelectorAll('.reanalyze-btn').forEach(btn => {
+      btn.onclick = async () => {
+        const movie = btn.dataset.movie;
+        const row = document.querySelector(`tr[data-movie="${CSS.escape(movie)}"]`);
+        const spinner = row.querySelector(`.reanalyze-status`);
+
+        // Show spinner
+        spinner.innerHTML = `<span class="reanalyze-spinner"></span>`;
+        btn.disabled = true;
+
+        // Call backend
+        const res = await fetch(`/api/reanalyze/${encodeURIComponent(movie)}`, {
+          method: 'POST',
+        });
+        const json = await res.json();
+
+        // Hide spinner
+        spinner.innerHTML = '';
+        btn.disabled = false;
+
+        if (!json.ok) {
+          alert('Re-analyze failed: ' + json.error);
+          return;
+        }
+
+        // Update only this row using fresh data
+        updateLibraryRow(row, json.data);
+      };
+    });
 
     tr.addEventListener('click', () => {
       openLibraryAnalysis(r);
@@ -545,31 +575,33 @@ function renderLibraryTable() {
   });
 }
 
-document.querySelectorAll('.reanalyze-btn').forEach(btn => {
-  btn.onclick = async () => {
-    const movie = btn.dataset.movie;
-    btn.disabled = true;
-    btn.textContent = 'Working...';
+function updateLibraryRow(row, data) {
+  const movie = row.dataset.movie;
 
-    const res = await fetch(`/api/reanalyze/${encodeURIComponent(movie)}`, {
-      method: 'POST',
-    });
+  // Update cells (directly)
+  row.querySelector('td:nth-child(3)').textContent = data.anchor_count ?? '';
+  row.querySelector('td:nth-child(4)').textContent = data.avg_offset ?? '';
+  row.querySelector('td:nth-child(5)').textContent = data.drift_span ?? '';
 
-    const json = await res.json();
-    console.log('Re-analyze result:', json);
+  // Update decision cell
+  const decisionCell = row.querySelector('td:nth-child(6)');
+  const decision = data.decision || 'unknown';
+  const statusClass =
+    decision === 'synced' ? 'green' : decision === 'bad' ? 'red' : 'yellow';
+  decisionCell.className = statusClass;
+  decisionCell.textContent = decision;
 
-    btn.disabled = false;
-    btn.textContent = 'Re-analyze';
-
-    if (!json.ok) {
-      alert('Re-analyze failed: ' + json.error);
-      return;
-    }
-
-    // Reload just one row in the table
-    loadLibrary(); // easiest solution for now
-  };
-});
+  // Update badges if needed
+  const titleCell = row.querySelector('td:nth-child(2)');
+  titleCell.innerHTML =
+    shortTitle(movie) +
+    ' ' +
+    (data.best_reference === 'whisper'
+      ? `<span class="whisper-tag">Whisper</span>`
+      : '') +
+    (data.best_reference === 'ffsync' ? `<span class="ffsync-tag">FFSync</span>` : '') +
+    (data.best_reference === 'en' ? `<span class="en-tag">EN</span>` : '');
+}
 
 async function openLibraryAnalysis(row) {
   // Reset UI state

@@ -395,134 +395,101 @@ app.post('/api/run-batch-scan', (req, res) => {
 app.post('/api/reanalyze/:movie', async (req, res) => {
   const movie = req.params.movie;
   const movieDir = path.join(MEDIA_ROOT, movie);
-  const analysisDir = path.join(DATA_ROOT, 'analysis', movie);
-  const syncinfoPath = path.join(analysisDir, 'analysis.syncinfo');
 
-  console.log(`→ Re-analyzing movie: ${movie}`);
-
-  // Existence check
   if (!fs.existsSync(movieDir)) {
     return res.json({ ok: false, error: 'movie_not_found' });
   }
 
-  // Load ignore list
-  let ignored = [];
+  // --- Ignore list ---
+  const ignoreFile = path.join(DATA_ROOT, 'ignore_list.json');
   try {
-    const ignorePath = path.join(DATA_ROOT, 'ignore_list.json');
-    if (fs.existsSync(ignorePath)) {
-      ignored = JSON.parse(fs.readFileSync(ignorePath, 'utf8'));
+    if (fs.existsSync(ignoreFile)) {
+      const ignored = JSON.parse(fs.readFileSync(ignoreFile, 'utf8'));
+      if (ignored.includes(movie)) {
+        return res.json({ ok: false, error: 'ignored' });
+      }
     }
-    if (ignored.includes(movie)) {
-      return res.json({ ok: false, error: 'ignored' });
-    }
-  } catch {
-    /* ignore */
-  }
+  } catch {}
 
-  // Locate references the same way batch_scan does
+  // --- Reference selection ---
   const whisperRef = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
-  const ffPath = path.join(DATA_ROOT, 'resync', movie);
+  const resyncDir = path.join(DATA_ROOT, 'resync', movie);
 
   let ref = null;
   let tgt = null;
   let refType = null;
 
-  // 1. Whisper reference?
+  // Whisper
   if (fs.existsSync(whisperRef)) {
     ref = whisperRef;
     refType = 'whisper';
-    console.log('  using whisper reference:', ref);
-
-    // Find FI subtitle
-    const files = fs.readdirSync(movieDir);
-    for (const f of files) {
-      if (f.toLowerCase().endsWith('.fi.srt') || f.toLowerCase().endsWith('.fin.srt')) {
-        tgt = path.join(movieDir, f);
-        break;
-      }
-    }
   }
 
-  // 2. ffsubsync reference?
-  if (!ref) {
-    const ffCandidates = fs
-      .readdirSync(ffPath ?? '')
+  // ffsubsync
+  if (!ref && fs.existsSync(resyncDir)) {
+    const ffsyncCandidates = fs
+      .readdirSync(resyncDir)
       .filter(f => f.endsWith('.synced.srt'));
-    if (ffCandidates.length > 0) {
-      ref = path.join(ffPath, ffCandidates[0]);
+    if (ffsyncCandidates.length > 0) {
+      ref = path.join(resyncDir, ffsyncCandidates[0]);
       refType = 'ffsync';
-      console.log('  using ffsubsync reference:', ref);
-
-      const files = fs.readdirSync(movieDir);
-      for (const f of files) {
-        if (
-          f.toLowerCase().endsWith('.fi.srt') ||
-          f.toLowerCase().endsWith('.fin.srt')
-        ) {
-          tgt = path.join(movieDir, f);
-          break;
-        }
-      }
     }
   }
 
-  // 3. EN/FI fallback
+  // EN fallback
   if (!ref) {
-    const files = fs.readdirSync(movieDir);
-    let en = null,
-      fi = null;
+    const list = fs.readdirSync(movieDir);
+    const en = list.find(
+      f => f.toLowerCase().endsWith('.en.srt') || f.toLowerCase().endsWith('.eng.srt')
+    );
 
-    for (const f of files) {
-      const lc = f.toLowerCase();
-      if (lc.endsWith('.en.srt') || lc.endsWith('.eng.srt'))
-        en = path.join(movieDir, f);
-      if (lc.endsWith('.fi.srt') || lc.endsWith('.fin.srt'))
-        fi = path.join(movieDir, f);
+    if (!en) {
+      return res.json({ ok: false, error: 'no_english_reference' });
     }
 
-    if (!en || !fi) {
-      return res.json({ ok: false, error: 'missing_subtitles' });
-    }
-
-    ref = en;
-    tgt = fi;
+    ref = path.join(movieDir, en);
     refType = 'en';
-    console.log('  using EN/FI reference:', ref);
   }
 
-  // Final check
-  if (!ref || !tgt) {
-    return res.json({ ok: false, error: 'no_reference_or_target' });
+  // --- FI target ---
+  const list = fs.readdirSync(movieDir);
+  const fi = list.find(
+    f => f.toLowerCase().endsWith('.fi.srt') || f.toLowerCase().endsWith('.fin.srt')
+  );
+
+  if (!fi) {
+    return res.json({ ok: false, error: 'missing_finnish_subtitle' });
   }
 
-  // Call Python aligner
-  let result;
+  tgt = path.join(movieDir, fi);
+
+  // -------------------------------------------------------
+  //  NOW CALL EXISTING /api/align INSTEAD OF RUNNING PYTHON
+  // -------------------------------------------------------
   try {
-    const { spawnSync } = require('child_process');
-    result = spawnSync('python3', ['python/align.py', ref, tgt], {
-      encoding: 'utf8',
-      maxBuffer: 50 * 1024 * 1024,
+    const alignRes = await fetch('http://localhost:5010/api/align', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference: ref, target: tgt }),
     });
 
-    if (result.status !== 0) {
-      return res.json({
-        ok: false,
-        error: result.stderr || 'align_failed',
-      });
+    const data = await alignRes.json();
+
+    if (!alignRes.ok || data.error) {
+      return res.json({ ok: false, error: data.error || 'align_failed' });
     }
 
-    const output = result.stdout.trim();
-    const data = JSON.parse(output);
-
-    // Add metadata
+    // Add metadata & write syncinfo
     data.best_reference = refType;
     data.reference_path = ref;
 
-    // Write syncinfo
-    fs.mkdirSync(analysisDir, { recursive: true });
-    fs.writeFileSync(syncinfoPath, JSON.stringify(data, null, 2));
+    const syncDir = path.join(DATA_ROOT, 'analysis', movie);
+    const syncFile = path.join(syncDir, 'analysis.syncinfo');
 
-    // Invalidate library cache
+    fs.mkdirSync(syncDir, { recursive: true });
+    fs.writeFileSync(syncFile, JSON.stringify(data, null, 2));
+
+    // Invalidate cache
     libraryCache = null;
 
     return res.json({ ok: true, movie, data });

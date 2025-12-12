@@ -190,6 +190,22 @@ button:disabled {
 .reanalyze-btn:hover {
   background: #555;
 }
+.reanalyze-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #888;
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* Manual align */
 
