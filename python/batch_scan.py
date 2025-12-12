@@ -178,7 +178,9 @@ def main():
     if SUMMARY_CSV.exists():
         SUMMARY_CSV.unlink()
 
-    print(f"Scanning library: {MEDIA_ROOT}")
+    # print(f"Scanning library: {MEDIA_ROOT}")
+    # Mark batch scan as started
+    update_progress("Starting...", 0, 0)
     total = len([d for d in MEDIA_ROOT.iterdir() if d.is_dir()])
 
     for i, folder in enumerate(sorted(MEDIA_ROOT.iterdir()), 1):
@@ -191,9 +193,6 @@ def main():
             continue
 
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
-
-        # Mark batch scan as started
-        update_progress("Starting...", 0, 0)
 
         # 1) Collect all candidates
         ref_candidates = collect_reference_candidates(folder, movie)
