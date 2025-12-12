@@ -159,7 +159,6 @@ def update_progress(movie, index, total):
                     "current_movie": movie,
                     "index": index,
                     "total": total,
-                    "timestamp": time.time(),
                 },
                 f,
             )
@@ -192,6 +191,9 @@ def main():
             continue
 
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
+
+        # Mark batch scan as started
+        update_progress("Starting...", 0, 0)
 
         # 1) Collect all candidates
         ref_candidates = collect_reference_candidates(folder, movie)
