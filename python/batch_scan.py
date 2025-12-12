@@ -182,7 +182,7 @@ def main():
     print(f"Scanning library: {MEDIA_ROOT}")
     total = len([d for d in MEDIA_ROOT.iterdir() if d.is_dir()])
 
-    for folder in sorted(MEDIA_ROOT.iterdir()):
+    for i, folder in enumerate(sorted(MEDIA_ROOT.iterdir()), 1):
         if not folder.is_dir():
             continue
 
@@ -197,12 +197,12 @@ def main():
         ref_candidates = collect_reference_candidates(folder, movie)
 
         if not ref_candidates:
-            print(f"[SKIP] No reference candidates for {movie}")
+            # print(f"[SKIP] No reference candidates for {movie}")
             continue
 
         # 2) Choose the newest reference
         ref_type, ref = max(ref_candidates, key=lambda x: x[1].stat().st_mtime)
-        print(f"[INFO] {movie}: selected reference '{ref_type}' → {ref.name}")
+        # print(f"[INFO] {movie}: selected reference '{ref_type}' → {ref.name}")
 
         tgt = find_fi_sub(folder)
         if not tgt:
@@ -213,6 +213,10 @@ def main():
         # Decide whether to reuse analysis or re-align
         # --------------------------------------------------
         analyze = False
+
+        # For progress tracking
+        update_progress(movie, i, total)
+        # print(f"--- Processing {i}/{total}: {movie} ---")
 
         if not syncinfo_path.exists():
             analyze = True
@@ -240,10 +244,6 @@ def main():
         # Case 2: Need to run aligner
         # --------------------------------------------------
 
-        # For progress tracking
-        update_progress(movie, i, total)
-        print(f"--- Processing {i}/{total}: {movie} ---")
-
         try:
             data = run_align(ref, tgt)
             data["best_reference"] = ref_type
@@ -254,9 +254,10 @@ def main():
 
         write_syncinfo(movie, data)
         append_summary(movie, data)
-        print(f"✔ Done: {movie} ({data['decision']})")
+        # print(f"✔ Done: {movie} ({data['decision']})")
 
     print("Batch scan complete.")
+    update_progress("Done", total, total)
 
 
 if __name__ == "__main__":

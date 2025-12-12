@@ -91,6 +91,11 @@ h1 {
   }
 }
 
+#batchStatus {
+  color: #aaa;
+  font-size: small;
+}
+
 /* Tabs */
 
 #tabs {
