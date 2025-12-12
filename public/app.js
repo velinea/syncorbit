@@ -531,16 +531,19 @@ function renderLibraryTable() {
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
-      <td class="${statusClass}">${shortStatus(r.decision)}</td>
-      <td><button class="reanalyze-btn" data-movie="${r.movie}">
-      &#128472;</button>
+      <td class="${statusClass}">${shortStatus(r.decision)}
       <span class="reanalyze-status" data-movie="${r.movie}"></span>
+      </td>
+      <td><button class="reanalyze-btn" data-movie="${
+        r.movie
+      }" title="Re-analyze this movie">
+      &#128472;</button>
       </td>
     `;
     document.querySelectorAll('.reanalyze-btn').forEach(btn => {
       btn.onclick = async () => {
         const movie = btn.dataset.movie;
-        const row = document.querySelector(`tr[data-movie="${CSS.escape(movie)}"]`);
+        const row = btn.closest('tr');
         const spinner = row.querySelector(`.reanalyze-status`);
 
         // Show spinner
@@ -563,7 +566,7 @@ function renderLibraryTable() {
         }
 
         // Update only this row using fresh data
-        updateLibraryRow(row, json.data);
+        updateLibraryRow(movie, row, json.data);
       };
     });
 
@@ -575,21 +578,26 @@ function renderLibraryTable() {
   });
 }
 
-function updateLibraryRow(row, data) {
-  const movie = row.dataset.movie;
-
+function updateLibraryRow(movie, row, data) {
+  console.log('Updating row for', movie, data);
   // Update cells (directly)
-  row.querySelector('td:nth-child(3)').textContent = data.anchor_count ?? '';
-  row.querySelector('td:nth-child(4)').textContent = data.avg_offset ?? '';
-  row.querySelector('td:nth-child(5)').textContent = data.drift_span ?? '';
+  row.querySelector('td:nth-child(3)').textContent = safe(data.anchor_count) ?? '';
+  row.querySelector('td:nth-child(4)').textContent = safe(data.avg_offset_sec) ?? '';
+  row.querySelector('td:nth-child(5)').textContent = safe(data.drift_span_sec) ?? '';
 
   // Update decision cell
   const decisionCell = row.querySelector('td:nth-child(6)');
   const decision = data.decision || 'unknown';
+
   const statusClass =
-    decision === 'synced' ? 'green' : decision === 'bad' ? 'red' : 'yellow';
+    decision === 'synced'
+      ? 'status-synced'
+      : decision === 'needs_adjustment'
+      ? 'status-adjust'
+      : 'status-bad';
+
   decisionCell.className = statusClass;
-  decisionCell.textContent = decision;
+  decisionCell.textContent = shortStatus(decision);
 
   // Update badges if needed
   const titleCell = row.querySelector('td:nth-child(2)');
@@ -597,10 +605,12 @@ function updateLibraryRow(row, data) {
     shortTitle(movie) +
     ' ' +
     (data.best_reference === 'whisper'
-      ? `<span class="whisper-tag">Whisper</span>`
+      ? `<span class="ref-badge ref-whisper">Whisper</span>`
       : '') +
-    (data.best_reference === 'ffsync' ? `<span class="ffsync-tag">FFSync</span>` : '') +
-    (data.best_reference === 'en' ? `<span class="en-tag">EN</span>` : '');
+    (data.best_reference === 'ffsync'
+      ? `<span class="ref-badge ref-ffsync">FFSync</span>`
+      : '') +
+    (data.best_reference === 'en' ? `<span class="ref-badge ref-en">en</span>` : '');
 }
 
 async function openLibraryAnalysis(row) {
