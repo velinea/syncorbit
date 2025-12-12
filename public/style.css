@@ -178,6 +178,19 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.reanalyze-btn {
+  padding: 3px 6px;
+  font-size: 11px;
+  background: #444;
+  border: 1px solid #666;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+}
+.reanalyze-btn:hover {
+  background: #555;
+}
+
 /* Manual align */
 
 #summary {

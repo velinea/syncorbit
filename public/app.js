@@ -532,6 +532,9 @@ function renderLibraryTable() {
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
       <td class="${statusClass}">${shortStatus(r.decision)}</td>
+      <td><button class="reanalyze-btn" data-movie="${r.movie}">
+      Re-analyze
+      </button></td>
     `;
 
     tr.addEventListener('click', () => {
@@ -541,6 +544,32 @@ function renderLibraryTable() {
     libraryTableBody.appendChild(tr);
   });
 }
+
+document.querySelectorAll('.reanalyze-btn').forEach(btn => {
+  btn.onclick = async () => {
+    const movie = btn.dataset.movie;
+    btn.disabled = true;
+    btn.textContent = 'Working...';
+
+    const res = await fetch(`/api/reanalyze/${encodeURIComponent(movie)}`, {
+      method: 'POST',
+    });
+
+    const json = await res.json();
+    console.log('Re-analyze result:', json);
+
+    btn.disabled = false;
+    btn.textContent = 'Re-analyze';
+
+    if (!json.ok) {
+      alert('Re-analyze failed: ' + json.error);
+      return;
+    }
+
+    // Reload just one row in the table
+    loadLibrary(); // easiest solution for now
+  };
+});
 
 async function openLibraryAnalysis(row) {
   // Reset UI state

@@ -392,6 +392,145 @@ app.post('/api/run-batch-scan', (req, res) => {
   });
 });
 
+app.post('/api/reanalyze/:movie', async (req, res) => {
+  const movie = req.params.movie;
+  const movieDir = path.join(MEDIA_ROOT, movie);
+  const analysisDir = path.join(DATA_ROOT, 'analysis', movie);
+  const syncinfoPath = path.join(analysisDir, 'analysis.syncinfo');
+
+  console.log(`→ Re-analyzing movie: ${movie}`);
+
+  // Existence check
+  if (!fs.existsSync(movieDir)) {
+    return res.json({ ok: false, error: 'movie_not_found' });
+  }
+
+  // Load ignore list
+  let ignored = [];
+  try {
+    const ignorePath = path.join(DATA_ROOT, 'ignore_list.json');
+    if (fs.existsSync(ignorePath)) {
+      ignored = JSON.parse(fs.readFileSync(ignorePath, 'utf8'));
+    }
+    if (ignored.includes(movie)) {
+      return res.json({ ok: false, error: 'ignored' });
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // Locate references the same way batch_scan does
+  const whisperRef = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
+  const ffPath = path.join(DATA_ROOT, 'resync', movie);
+
+  let ref = null;
+  let tgt = null;
+  let refType = null;
+
+  // 1. Whisper reference?
+  if (fs.existsSync(whisperRef)) {
+    ref = whisperRef;
+    refType = 'whisper';
+    console.log('  using whisper reference:', ref);
+
+    // Find FI subtitle
+    const files = fs.readdirSync(movieDir);
+    for (const f of files) {
+      if (f.toLowerCase().endsWith('.fi.srt') || f.toLowerCase().endsWith('.fin.srt')) {
+        tgt = path.join(movieDir, f);
+        break;
+      }
+    }
+  }
+
+  // 2. ffsubsync reference?
+  if (!ref) {
+    const ffCandidates = fs
+      .readdirSync(ffPath ?? '')
+      .filter(f => f.endsWith('.synced.srt'));
+    if (ffCandidates.length > 0) {
+      ref = path.join(ffPath, ffCandidates[0]);
+      refType = 'ffsync';
+      console.log('  using ffsubsync reference:', ref);
+
+      const files = fs.readdirSync(movieDir);
+      for (const f of files) {
+        if (
+          f.toLowerCase().endsWith('.fi.srt') ||
+          f.toLowerCase().endsWith('.fin.srt')
+        ) {
+          tgt = path.join(movieDir, f);
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. EN/FI fallback
+  if (!ref) {
+    const files = fs.readdirSync(movieDir);
+    let en = null,
+      fi = null;
+
+    for (const f of files) {
+      const lc = f.toLowerCase();
+      if (lc.endsWith('.en.srt') || lc.endsWith('.eng.srt'))
+        en = path.join(movieDir, f);
+      if (lc.endsWith('.fi.srt') || lc.endsWith('.fin.srt'))
+        fi = path.join(movieDir, f);
+    }
+
+    if (!en || !fi) {
+      return res.json({ ok: false, error: 'missing_subtitles' });
+    }
+
+    ref = en;
+    tgt = fi;
+    refType = 'en';
+    console.log('  using EN/FI reference:', ref);
+  }
+
+  // Final check
+  if (!ref || !tgt) {
+    return res.json({ ok: false, error: 'no_reference_or_target' });
+  }
+
+  // Call Python aligner
+  let result;
+  try {
+    const { spawnSync } = require('child_process');
+    result = spawnSync('python3', ['python/align.py', ref, tgt], {
+      encoding: 'utf8',
+      maxBuffer: 50 * 1024 * 1024,
+    });
+
+    if (result.status !== 0) {
+      return res.json({
+        ok: false,
+        error: result.stderr || 'align_failed',
+      });
+    }
+
+    const output = result.stdout.trim();
+    const data = JSON.parse(output);
+
+    // Add metadata
+    data.best_reference = refType;
+    data.reference_path = ref;
+
+    // Write syncinfo
+    fs.mkdirSync(analysisDir, { recursive: true });
+    fs.writeFileSync(syncinfoPath, JSON.stringify(data, null, 2));
+
+    // Invalidate library cache
+    libraryCache = null;
+
+    return res.json({ ok: true, movie, data });
+  } catch (err) {
+    return res.json({ ok: false, error: err.toString() });
+  }
+});
+
 app.get('/api/library', (req, res) => {
   try {
     const now = Date.now();
