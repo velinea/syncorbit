@@ -29,6 +29,7 @@ REF_ROOT = DATA_ROOT / "ref"
 RESYNC_ROOT = DATA_ROOT / "resync"
 SUMMARY_CSV = DATA_ROOT / "syncorbit_library_summary.csv"
 IGNORE_FILE = DATA_ROOT / "ignore_list.json"
+PROGRESS_FILE = DATA_ROOT / "batch_progress.json"
 
 PY = "/app/.venv/bin/python3"
 ALIGN_PY = "/app/python/align.py"
@@ -150,6 +151,22 @@ def append_summary(movie_name: str, data: dict):
         )
 
 
+def update_progress(movie, index, total):
+    try:
+        with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "current_movie": movie,
+                    "index": index,
+                    "total": total,
+                    "timestamp": time.time(),
+                },
+                f,
+            )
+    except:
+        pass
+
+
 # ----------------------------
 # Main scanning logic
 # ----------------------------
@@ -163,6 +180,7 @@ def main():
         SUMMARY_CSV.unlink()
 
     print(f"Scanning library: {MEDIA_ROOT}")
+    total = len([d for d in MEDIA_ROOT.iterdir() if d.is_dir()])
 
     for folder in sorted(MEDIA_ROOT.iterdir()):
         if not folder.is_dir():
@@ -221,6 +239,11 @@ def main():
         # --------------------------------------------------
         # Case 2: Need to run aligner
         # --------------------------------------------------
+
+        # For progress tracking
+        update_progress(movie, i, total)
+        print(f"--- Processing {i}/{total}: {movie} ---")
+
         try:
             data = run_align(ref, tgt)
             data["best_reference"] = ref_type

@@ -245,6 +245,21 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
   res.json({ ok: true, results, errors });
 });
 
+app.get('/api/batch_progress', (req, res) => {
+  const progressPath = path.join(DATA_ROOT, 'batch_progress.json');
+
+  if (!fs.existsSync(progressPath)) {
+    return res.json({ running: false });
+  }
+
+  try {
+    const data = JSON.parse(fs.readFileSync(progressPath, 'utf8'));
+    return res.json({ running: true, ...data });
+  } catch (e) {
+    return res.json({ running: false });
+  }
+});
+
 app.post('/api/analyze', (req, res) => {
   const file = req.body.path;
   if (!file) return res.status(400).json({ error: 'no file' });

@@ -125,6 +125,23 @@ function renderSummary(d, targetEl = summaryPre) {
     `Decision:   ${decision}`;
 }
 
+// -------- BATCH PROGRESS POLLING --------
+async function pollBatchProgress() {
+  const res = await fetch('/api/batch_progress');
+  const p = await res.json();
+
+  if (!p.running) {
+    document.getElementById('batchStatus').textContent = 'Idle';
+    return;
+  }
+
+  document.getElementById(
+    'batchStatus'
+  ).textContent = `Scanning ${p.index}/${p.total}: ${p.current_movie}`;
+}
+
+setInterval(pollBatchProgress, 1000);
+
 // -------- MANUAL SEARCH --------
 
 if (searchBox) {
