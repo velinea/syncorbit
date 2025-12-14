@@ -1,10 +1,12 @@
-# ![](public/logo.png) SyncOrbit
+# <img src="public/logo.png" width=80px> SyncOrbit
 
 - SyncOrbit is a subtitle alignment, analysis, and correction tool designed for large movie libraries.
 - It helps you detect subtitle drift, choose the best reference, and automatically or manually re-align subtitles using a combination of traditional methods and AI-based transcription (WhisperX).
 - SyncOrbit is built for power users with curated media libraries (Radarr / Bazarr workflows), and focuses on transparency and control rather than fully automatic “black box” syncing.
 
 ## ✨ Key Features
+
+<img src="docs/screenshot1.png">
 
 ### 📚 Library-wide subtitle analysis
 
@@ -140,7 +142,7 @@ SyncOrbit is not fully automatic by design.
 
 ### 📜 License
 
-MIT
+[MIT](https://github.com/velinea/syncorbit/blob/main/LICENSE.md)
 
 ### 🙏 Acknowledgements
 

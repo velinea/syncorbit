@@ -390,14 +390,14 @@ button:disabled {
   height: 16px;
 }
 
-.status-adjust {
+#status-adjust {
   background: #eab308;
   border-radius: 4px;
   width: 16px;
   height: 16px;
 }
 
-.status-bad {
+#status-bad {
   background: #ef4444;
   border-radius: 4px;
   width: 16px;

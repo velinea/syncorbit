@@ -426,14 +426,6 @@ function shortStatus(s) {
   return '<div id="status-bad"</div>';
 }
 
-function autoFixLabel(r) {
-  // Very rough: synced or small drift = ok
-  if (r.decision === 'synced') return 'ok>';
-  if (r.decision === 'needs_adjustment') return 'maybe';
-  if (r.decision === 'bad') return 'no';
-  return 'no';
-}
-
 const runBatchScanBtn = document.getElementById('runBatchScanBtn');
 
 runBatchScanBtn.addEventListener('click', async () => {
@@ -502,13 +494,6 @@ function renderLibraryTable() {
   limited.forEach(r => {
     const tr = document.createElement('tr');
 
-    const statusClass =
-      r.decision === 'synced'
-        ? 'status-synced'
-        : r.decision === 'needs_adjustment'
-        ? 'status-adjust'
-        : 'status-bad';
-
     let refBadge = '';
 
     if (r.best_reference === 'whisper') {
@@ -531,7 +516,7 @@ function renderLibraryTable() {
       <td>${safe(r.anchor_count)}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
-      <td class="${statusClass}">${shortStatus(r.decision)}
+      <td>${shortStatus(r.decision)}
       <span class="reanalyze-status" data-movie="${r.movie}"></span>
       </td>
       <td><button class="reanalyze-btn" data-movie="${
@@ -589,14 +574,6 @@ function updateLibraryRow(movie, row, data) {
   const decisionCell = row.querySelector('td:nth-child(6)');
   const decision = data.decision || 'unknown';
 
-  const statusClass =
-    decision === 'synced'
-      ? 'status-synced'
-      : decision === 'needs_adjustment'
-      ? 'status-adjust'
-      : 'status-bad';
-
-  decisionCell.className = statusClass;
   decisionCell.textContent = shortStatus(decision);
 
   // Update badges if needed
