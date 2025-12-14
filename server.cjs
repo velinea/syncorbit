@@ -573,6 +573,7 @@ app.get('/api/library', (req, res) => {
       const whisperRefPath = path.join(refDir, movie, 'ref.srt');
       const ffsubsyncPath = path.join(resyncDir, movie);
 
+      /*
       let best_reference = null;
       let reference_path = null;
 
@@ -585,6 +586,24 @@ app.get('/api/library', (req, res) => {
       } catch (err) {
         console.error(`Error reading syncinfo for ${movie}:`, err);
       }
+ */
+      function fastReadReferenceInfo(filePath) {
+        const text = fs.readFileSync(filePath, 'utf8');
+
+        let best_reference = null;
+        let reference_path = null;
+
+        // These lines are small — regex is fast here
+        const br = text.match(/"best_reference"\s*:\s*"([^"]*)"/);
+        const rp = text.match(/"reference_path"\s*:\s*"([^"]*)"/);
+
+        if (br) best_reference = br[1];
+        if (rp) reference_path = rp[1];
+
+        return { best_reference, reference_path };
+      }
+
+      const { best_reference, reference_path } = fastReadReferenceInfo(syncinfoFile);
 
       rows.push({
         movie,
