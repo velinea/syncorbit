@@ -152,12 +152,46 @@ SyncOrbit is not fully automatic by design.
 - apidFuzz
 - Radarr / Bazarr ecosystems
 
-### 💬 Why SyncOrbit?
+## ✍️ Why SyncOrbit Exists
 
-**Because subtitle syncing is:**
+Subtitle syncing looks like a solved problem — until you try to manage it at scale.
 
-- hard to automate perfectly
-- painful to debug at scale
-- impossible without visibility
+If you have a handful of movies, tools like ffsubsync or manual shifting are often enough.
+But once your library grows into the hundreds or thousands, subtle problems start to surface:
 
-SyncOrbit exists to make subtitle sync observable, measurable, and fixable.
+- Subtitles that mostly work, but slowly drift out of sync
+- Different releases using slightly different cuts or frame rates
+- “Synced” subtitles that are technically aligned but unpleasant to watch
+- Automatic tools that fail silently or overwrite good data
+- No clear way to understand why a subtitle is bad, only that it feels wrong
+
+At that point, syncing stops being a one-off task and becomes a library-wide quality problem.
+
+Most existing tools focus on fixing subtitles.
+Very few focus on understanding them.
+
+SyncOrbit was created to fill that gap.
+
+Instead of treating subtitle syncing as a black box, SyncOrbit makes it:
+
+- Observable — you can see anchor density, drift, offsets, and trends
+- Comparable — EN vs Whisper vs ffsubsync references are visible and traceable
+- Reversible — nothing is blindly overwritten; decisions are explicit
+- Scalable — designed for large, curated libraries, not single files
+
+SyncOrbit doesn’t aim for “perfect automation”.
+It aims for informed decisions.
+
+It helps you answer questions like:
+
+- Is this subtitle actually good, or just “good enough”?
+- Which reference worked best for this movie — and why?
+- Is this a one-off problem, or a systematic issue across releases?
+- What should I fix next, and what can I safely ignore?
+
+In short:
+
+SyncOrbit exists to give you control back over subtitle quality — without forcing you to micromanage every movie.
+
+If you care about subtitles enough to notice when they’re almost right,
+SyncOrbit is built for you.
