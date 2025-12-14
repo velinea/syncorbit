@@ -1,4 +1,4 @@
-# <img src="public/logo.png" width=80px> SyncOrbit
+# <img src="public/logo.png" width=100px> SyncOrbit
 
 - SyncOrbit is a subtitle alignment, analysis, and correction tool designed for large movie libraries.
 - It helps you detect subtitle drift, choose the best reference, and automatically or manually re-align subtitles using a combination of traditional methods and AI-based transcription (WhisperX).
@@ -55,7 +55,7 @@
 │      Node.js API       │
 │   server.cjs           │
 │   bulk actions         │
-│   progress tracking   │
+│   progress tracking    │
 └───────────▲────────────┘
             │ spawn
 ┌───────────┴────────────┐
