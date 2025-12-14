@@ -421,14 +421,14 @@ function shortTitle(t) {
 }
 
 function shortStatus(s) {
-  if (s === 'synced') return 'ok';
-  if (s === 'needs_adjustment') return 'poor';
-  return 'bad';
+  if (s === 'synced') return '<div id="status-synced"</div>';
+  if (s === 'needs_adjustment') return '<div id="status-adjust"</div>';
+  return '<div id="status-bad"</div>';
 }
 
 function autoFixLabel(r) {
   // Very rough: synced or small drift = ok
-  if (r.decision === 'synced') return 'ok';
+  if (r.decision === 'synced') return <'ok>';
   if (r.decision === 'needs_adjustment') return 'maybe';
   if (r.decision === 'bad') return 'no';
   return 'no';
