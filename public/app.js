@@ -428,7 +428,7 @@ function shortStatus(s) {
 
 function autoFixLabel(r) {
   // Very rough: synced or small drift = ok
-  if (r.decision === 'synced') return <'ok>';
+  if (r.decision === 'synced') return 'ok>';
   if (r.decision === 'needs_adjustment') return 'maybe';
   if (r.decision === 'bad') return 'no';
   return 'no';
