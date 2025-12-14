@@ -421,9 +421,9 @@ function shortTitle(t) {
 }
 
 function shortStatus(s) {
-  if (s === 'synced') return '<div id="status-synced"</div>';
-  if (s === 'needs_adjustment') return '<div id="status-adjust"</div>';
-  return '<div id="status-bad"</div>';
+  if (s === 'synced') return '<div id="status-synced"></div>';
+  if (s === 'needs_adjustment') return '<div id="status-adjust"></div>';
+  return '<div id="status-bad"></div>';
 }
 
 const runBatchScanBtn = document.getElementById('runBatchScanBtn');

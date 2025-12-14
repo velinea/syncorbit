@@ -105,9 +105,7 @@ export function drawGraph(canvas, anchors) {
     const y = toCanvasY(ys[closest]);
 
     const tSeconds = xs[closest];
-    const mm = Math.floor(tSeconds / 60);
-    const ss = Math.floor(tSeconds % 60);
-    const timeStr = `${mm}:${ss.toString().padStart(2, '0')}`;
+    const timeStr = new Date(tSeconds * 1000).toISOString().slice(11, 19);
 
     tip.textContent = `${timeStr}  |  Δ ${ys[closest].toFixed(3)}s`;
     tip.style.left = `${rect.left + x + 15}px`;
