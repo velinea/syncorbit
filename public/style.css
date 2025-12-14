@@ -383,25 +383,26 @@ button:disabled {
   background: #020617;
 }
 
-#status-synced {
-  background: #22c55e;
+#status-synced,
+#status-adjust,
+#status-bad {
   border-radius: 4px;
   width: 16px;
   height: 16px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+#status-synced {
+  background: #22c55e;
 }
 
 #status-adjust {
   background: #eab308;
-  border-radius: 4px;
-  width: 16px;
-  height: 16px;
 }
 
 #status-bad {
   background: #ef4444;
-  border-radius: 4px;
-  width: 16px;
-  height: 16px;
 }
 
 .note {

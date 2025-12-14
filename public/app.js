@@ -574,7 +574,7 @@ function updateLibraryRow(movie, row, data) {
   const decisionCell = row.querySelector('td:nth-child(6)');
   const decision = data.decision || 'unknown';
 
-  decisionCell.textContent = shortStatus(decision);
+  decisionCell.innerHTML = shortStatus(decision);
 
   // Update badges if needed
   const titleCell = row.querySelector('td:nth-child(2)');
