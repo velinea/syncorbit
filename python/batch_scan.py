@@ -203,11 +203,11 @@ def main():
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
 
         # 1) Collect all candidates
-        # ref_candidates = collect_reference_candidates(folder, movie)
+        ref_candidates = collect_reference_candidates(folder, movie)
 
-        # if not ref_candidates:
-        #     # print(f"[SKIP] No reference candidates for {movie}")
-        #     continue
+        if not ref_candidates:
+            # print(f"[SKIP] No reference candidates for {movie}")
+            continue
 
         resync_dir = RESYNC_ROOT / movie
         has_ffsync = resync_dir.exists() and any(
