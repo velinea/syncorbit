@@ -15,6 +15,7 @@ Falls back to EN/FI subtitle pairs inside /app/media.
 import csv
 import json
 import os
+import time
 import subprocess
 from pathlib import Path
 
