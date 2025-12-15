@@ -278,8 +278,8 @@ def main():
         row = {
             "movie": movie,
             "anchor_count": data.get("anchor_count"),
-            "avg_offset": data.get("avg_offset"),
-            "drift_span": data.get("drift_span"),
+            "avg_offset": data.get("avg_offset_sec"),
+            "drift_span": data.get("drift_span_sec"),
             "decision": data.get("decision"),
             "best_reference": data.get("best_reference"),
             "reference_path": data.get("reference_path"),
