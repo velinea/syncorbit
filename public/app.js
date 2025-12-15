@@ -430,7 +430,7 @@ const runBatchScanBtn = document.getElementById('runBatchScanBtn');
 
 runBatchScanBtn.addEventListener('click', async () => {
   runBatchScanBtn.disabled = true;
-  runBatchScanBtn.textContent = 'Scanning… (this may take some time)';
+  runBatchScanBtn.textContent = 'Scanning…';
 
   try {
     const res = await fetch('/api/run-batch-scan', { method: 'POST' });
@@ -513,7 +513,7 @@ function renderLibraryTable() {
       class="row-check"
       data-movie="${r.movie}" onclick="event.stopPropagation()"></td>
       <td>${shortTitle(r.movie)} ${refBadge}</td>
-      <td>${safe(r.anchor_count)}</td>
+      <td>${r.anchor_count}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
       <td>${shortStatus(r.decision)}
@@ -566,7 +566,7 @@ function renderLibraryTable() {
 function updateLibraryRow(movie, row, data) {
   console.log('Updating row for', movie, data);
   // Update cells (directly)
-  row.querySelector('td:nth-child(3)').textContent = safe(data.anchor_count) ?? '';
+  row.querySelector('td:nth-child(3)').textContent = data.anchor_count ?? '';
   row.querySelector('td:nth-child(4)').textContent = safe(data.avg_offset_sec) ?? '';
   row.querySelector('td:nth-child(5)').textContent = safe(data.drift_span_sec) ?? '';
 
@@ -685,7 +685,7 @@ bulkBtn.addEventListener('click', () => {
     x => x.dataset.movie
   );
 
-  text.textContent = `Selected movies:\n${selectedMovies.join('\n')}`;
+  text.textContent = `<b>Selected movies:\n${selectedMovies.join('\n')}`;
 
   currentBulkSelection = selectedMovies; // store for “Run” button
   bulkModal.style.display = 'block';

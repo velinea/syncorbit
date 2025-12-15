@@ -34,6 +34,21 @@ PROGRESS_FILE = DATA_ROOT / "batch_progress.json"
 PY = "/app/.venv/bin/python3"
 ALIGN_PY = "/app/python/align.py"
 
+CSV_FIELDS = [
+    "movie",
+    "anchor_count",
+    "avg_offset",
+    "drift_span",
+    "decision",
+    "best_reference",
+    "reference_path",
+    "has_whisper",
+    "has_ffsubsync",
+    "fi_mtime",
+    "last_analyzed",
+    "ignored",
+]
+
 # ----------------------------
 # Helpers
 # ----------------------------
@@ -132,23 +147,16 @@ def write_syncinfo(movie_name: str, data: dict):
     return outpath
 
 
-def append_summary(movie_name: str, data: dict):
-    """
-    Append one summary row. No header.
-    """
-    SUMMARY_CSV.parent.mkdir(parents=True, exist_ok=True)
+def write_summary_row(row: dict, csv_path: Path):
+    exists = csv_path.exists()
 
-    with open(SUMMARY_CSV, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(
-            [
-                movie_name,
-                data.get("anchor_count", 0),
-                data.get("avg_offset_sec", 0.0),
-                data.get("drift_span_sec", 0.0),
-                data.get("decision", "unknown"),
-            ]
-        )
+    with open(csv_path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+
+        if not exists:
+            writer.writeheader()
+
+        writer.writerow(row)
 
 
 def update_progress(movie, index, total):
@@ -195,18 +203,26 @@ def main():
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
 
         # 1) Collect all candidates
-        ref_candidates = collect_reference_candidates(folder, movie)
+        # ref_candidates = collect_reference_candidates(folder, movie)
 
-        if not ref_candidates:
-            # print(f"[SKIP] No reference candidates for {movie}")
-            continue
+        # if not ref_candidates:
+        #     # print(f"[SKIP] No reference candidates for {movie}")
+        #     continue
+
+        resync_dir = RESYNC_ROOT / movie
+        has_ffsync = resync_dir.exists() and any(
+            p.name.endswith(".synced.srt") for p in resync_dir.iterdir()
+        )
 
         # 2) Choose the newest reference
         ref_type, ref = max(ref_candidates, key=lambda x: x[1].stat().st_mtime)
         # print(f"[INFO] {movie}: selected reference '{ref_type}' → {ref.name}")
 
         tgt = find_fi_sub(folder)
-        if not tgt:
+        fi_mtime = None
+        if tgt and tgt.exists():
+            fi_mtime = tgt.stat().st_mtime
+        else:
             print(f"[SKIP] No FI subtitle found for {movie}")
             continue
 
@@ -254,8 +270,25 @@ def main():
             continue
 
         write_syncinfo(movie, data)
-        append_summary(movie, data)
-        # print(f"✔ Done: {movie} ({data['decision']})")
+
+        now = time.time()
+        whisper_ref_path = REF_ROOT / movie / "ref.srt"
+
+        row = {
+            "movie": movie,
+            "anchor_count": data.get("anchor_count"),
+            "avg_offset": data.get("avg_offset"),
+            "drift_span": data.get("drift_span"),
+            "decision": data.get("decision"),
+            "best_reference": data.get("best_reference"),
+            "reference_path": data.get("reference_path"),
+            "has_whisper": whisper_ref_path.exists(),
+            "has_ffsubsync": has_ffsync,  # compute once earlier
+            "fi_mtime": fi_mtime,  # compute once earlier
+            "last_analyzed": now,
+            "ignored": movie in ignored,
+        }
+        write_summary_row(row, SUMMARY_CSV)
 
     print("Batch scan complete.")
     update_progress("Done", total, total)
