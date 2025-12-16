@@ -604,6 +604,7 @@ app.get('/api/analysis/:movie', (req, res) => {
       // Canonical offsets (seconds)
       avg_offset: raw.median_offset_sec ?? raw.avg_offset_sec,
       max_offset: raw.max_offset_sec,
+      min_offset: raw.min_offset_sec,
       drift_span: raw.robust_drift_span_sec ?? raw.drift_span_sec,
 
       // Graph data

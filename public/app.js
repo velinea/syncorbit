@@ -505,7 +505,8 @@ function renderLibraryTable() {
       <td><input type="checkbox"
       class="row-check"
       data-movie="${r.movie}" onclick="event.stopPropagation()"></td>
-      <td>${shortTitle(r.movie)} ${refBadge}</td>
+      <td><div style="float-left;">${shortTitle(r.movie)}</div>
+      <div style="float-right;">${refBadge}</div></td>
       <td>${r.anchor_count}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
@@ -593,7 +594,7 @@ async function openLibraryAnalysis(row) {
   try {
     const res = await fetch(`/api/analysis/${encodeURIComponent(row.movie)}`);
     const json = await res.json();
-    console.log('Loaded analysis for', row.movie, data);
+    console.log('Loaded analysis for', row.movie, json.data);
     if (!json.ok) {
       if (row.has_whisper) {
         librarySummaryPre.textContent =
