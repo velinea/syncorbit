@@ -500,115 +500,80 @@ app.post('/api/reanalyze/:movie', async (req, res) => {
 
 app.get('/api/library', (req, res) => {
   try {
-    const now = Date.now();
-
-    // --- Return cached version if still valid ---
-    if (libraryCache && now - libraryCacheTime < LIBRARY_CACHE_TTL) {
-      return res.json(libraryCache);
-    }
-
-    const dataDir = process.env.SYNCORBIT_DATA || '/app/data';
-    const csvPath = path.join(dataDir, 'syncorbit_library_summary.csv');
+    const csvPath = path.join(DATA_ROOT, 'syncorbit_library_summary.csv');
 
     if (!fs.existsSync(csvPath)) {
-      return res.json({ ok: false, error: 'missing_summary_file' });
+      return res.json({ ok: false, error: 'no_summary_csv' });
     }
 
-    const analysisDir = path.join(dataDir, 'analysis');
-    const refDir = path.join(dataDir, 'ref');
-    const resyncDir = path.join(dataDir, 'resync');
+    const raw = fs.readFileSync(csvPath, 'utf8').trim().split('\n').filter(Boolean);
 
-    function parseCSVLine(line) {
-      const result = [];
+    if (raw.length <= 1) {
+      return res.json({ ok: true, rows: [] });
+    }
+
+    // --- CSV parsing (simple, predictable) ---
+    const header = raw[0].split(',');
+
+    const rows = raw.slice(1).map(line => {
+      const cols = [];
       let current = '';
-      let insideQuotes = false;
+      let inQuotes = false;
 
       for (let i = 0; i < line.length; i++) {
         const c = line[i];
+
         if (c === '"') {
-          insideQuotes = !insideQuotes;
+          inQuotes = !inQuotes;
           continue;
         }
-        if (c === ',' && !insideQuotes) {
-          result.push(current);
+        if (c === ',' && !inQuotes) {
+          cols.push(current);
           current = '';
           continue;
         }
         current += c;
       }
-      result.push(current);
-      return result;
-    }
+      cols.push(current);
 
-    // Load CSV lines
-    const raw = fs.readFileSync(csvPath, 'utf8').trim().split('\n').filter(Boolean);
-
-    const rows = [];
-
-    for (const line of raw) {
-      const parts = parseCSVLine(line);
-
-      // Must have 5 columns
-      if (parts.length < 5) continue;
-
-      let movie = (parts[0] || '').replace(/^"|"$/g, '').trim();
-
-      // Skip header row
-      if (movie.toLowerCase() === 'movie') continue;
-      if (!movie) continue;
-
-      const anchor_count = Number(parts[1]);
-      const avg_offset = Number(parts[2]);
-      const drift_span = Number(parts[3]);
-      const decision = (parts[4] || 'unknown').trim().toLowerCase();
-
-      // If any numeric field is NaN, skip row
-      if (isNaN(anchor_count) || isNaN(avg_offset) || isNaN(drift_span)) {
-        console.warn('Skipping malformed row:', line);
-        continue;
-      }
-
-      // Paths
-      const syncinfoPath = path.join(analysisDir, movie, 'analysis.syncinfo');
-      const whisperRefPath = path.join(refDir, movie, 'ref.srt');
-      const ffsubsyncPath = path.join(resyncDir, movie);
-
-      let best_reference = null;
-      let reference_path = null;
-
-      try {
-        if (fs.existsSync(syncinfoPath)) {
-          const info = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
-          best_reference = info.best_reference ?? null;
-          reference_path = info.reference_path ?? null;
-        }
-      } catch (err) {
-        console.error(`Error reading syncinfo for ${movie}:`, err);
-      }
-
-      rows.push({
-        movie,
-        anchor_count,
-        avg_offset,
-        drift_span,
-        decision,
-
-        syncinfo_path: fs.existsSync(syncinfoPath) ? syncinfoPath : null,
-        whisper_ref: fs.existsSync(whisperRefPath),
-        whisper_ref_path: fs.existsSync(whisperRefPath) ? whisperRefPath : null,
-        ffsubsyncPath: fs.existsSync(ffsubsyncPath) ? ffsubsyncPath : null,
-
-        best_reference,
-        reference_path,
+      const row = {};
+      header.forEach((key, idx) => {
+        row[key] = cols[idx] ?? null;
       });
-    }
 
-    libraryCache = rows; // cache just the array
-    libraryCacheTime = now;
-    res.json(rows); // UI wants an array as the root JSON value
-  } catch (e) {
-    console.error('Library API error:', e);
-    return res.json({ ok: false, error: e.toString() });
+      // --- Normalize types for UI ---
+      return {
+        movie: row.movie,
+
+        anchor_count: Number(row.anchor_count) || 0,
+        avg_offset: Number(row.avg_offset) || 0,
+        drift_span: Number(row.drift_span) || 0,
+        decision: row.decision || 'unknown',
+
+        best_reference: row.best_reference || null,
+        reference_path: row.reference_path || null,
+
+        has_whisper:
+          row.has_whisper === 'True' ||
+          row.has_whisper === 'true' ||
+          row.has_whisper === '1',
+        has_ffsubsync:
+          row.has_ffsubsync === 'True' ||
+          row.has_ffsubsync === 'true' ||
+          row.has_ffsubsync === '1',
+
+        fi_mtime: row.fi_mtime ? Number(row.fi_mtime) : null,
+        last_analyzed: row.last_analyzed ? Number(row.last_analyzed) : null,
+
+        ignored:
+          row.ignored === 'True' || row.ignored === 'true' || row.ignored === '1',
+      };
+    });
+
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error('api/library error:', err);
+    res.json({ ok: false, error: err.toString() });
   }
 });
 

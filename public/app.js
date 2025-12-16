@@ -142,6 +142,23 @@ async function pollBatchProgress() {
 
 setInterval(pollBatchProgress, 1000);
 
+app.get('/api/analysis/:movie', (req, res) => {
+  try {
+    const movie = req.params.movie;
+    const syncinfoPath = path.join(DATA_ROOT, 'analysis', movie, 'analysis.syncinfo');
+
+    if (!fs.existsSync(syncinfoPath)) {
+      return res.json({ ok: false, error: 'no_syncinfo' });
+    }
+
+    const data = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error('analysis load error:', err);
+    res.json({ ok: false, error: err.toString() });
+  }
+});
+
 // -------- MANUAL SEARCH --------
 
 if (searchBox) {
@@ -302,7 +319,7 @@ async function loadLibrary() {
 
   try {
     const res = await fetch('/api/library');
-    const data = await res.json();
+    const json = await res.json();
 
     if (data.error === 'no_summary_file') {
       libraryRows = [];
@@ -312,14 +329,15 @@ async function loadLibrary() {
       return;
     }
 
-    if (!Array.isArray(data)) {
+    if (!json.ok || !Array.isArray(json.rows)) {
       libraryRows = [];
-      libraryTableBody.innerHTML = "<tr><td colspan='5'>Unexpected response.</td></tr>";
+      libraryTableBody.innerHTML = "<tr><td colspan='7'>Unexpected response.</td></tr>";
       return;
     }
 
-    libraryRows = data;
-    renderLibraryTable();
+    libraryRows = json.rows;
+    renderLibraryTable(libraryRows);
+
     libNote.textContent =
       'Tip: use search / filters, then click any movie row to see its analysis.';
   } catch (e) {
@@ -597,48 +615,31 @@ async function openLibraryAnalysis(row) {
   autoCorrectResult.textContent = '';
   if (autoCorrectBtn) autoCorrectBtn.disabled = true;
 
-  // ----------------------------------------------------------
-  // CASE 1: No syncinfo_path — this can mean Whisper ref exists
-  //         but analysis has not been generated yet.
-  // ----------------------------------------------------------
-  if (!row.syncinfo_path) {
-    if (row.whisper_ref) {
-      librarySummaryPre.textContent =
-        'Whisper reference exists, but no analysis yet.\nRun batch scan to generate analysis.';
-    } else {
-      librarySummaryPre.textContent = 'No analysis.syncinfo found for this movie.';
-    }
-
-    currentLibraryRow = null;
-    currentLibraryAnalysis = null;
-    return;
-  }
-
-  // ----------------------------------------------------------
-  // CASE 2: syncinfo exists — fetch analysis
-  // ----------------------------------------------------------
   try {
-    const res = await fetch(
-      `/api/movieinfo?file=${encodeURIComponent(row.syncinfo_path)}`
-    );
+    const res = await fetch(`/api/analysis/${encodeURIComponent(row.movie)}`);
     const data = await res.json();
 
-    if (data.error) {
-      librarySummaryPre.textContent = `Error: ${data.error}`;
+    if (!data.ok) {
+      if (row.has_whisper) {
+        librarySummaryPre.textContent =
+          'Whisper reference exists, but no analysis yet.\nRun batch scan to generate analysis.';
+      } else {
+        librarySummaryPre.textContent = 'No analysis available for this movie yet.';
+      }
+
       clearLibraryGraph();
       currentLibraryRow = null;
       currentLibraryAnalysis = null;
       if (autoCorrectBtn) autoCorrectBtn.disabled = true;
       return;
+    } else {
+      currentLibraryRow = row;
+      currentLibraryAnalysis = data.data;
+
+      // Render summary + graph
+      renderSummary(data, librarySummaryPre);
+      drawGraph(libraryCanvas, data.clean_offsets || data.offsets || []);
     }
-
-    // Store for autocorrect
-    currentLibraryRow = row;
-    currentLibraryAnalysis = data;
-
-    // Render summary + graph
-    renderSummary(data, librarySummaryPre);
-    drawGraph(libraryCanvas, data.clean_offsets || data.offsets || []);
 
     // ----------------------------------------------------------
     // Auto-correct available when a real target subtitle exists
