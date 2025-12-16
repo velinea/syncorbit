@@ -112,9 +112,9 @@ function renderSummary(d, targetEl = summaryPre) {
   const min = Number(d.min_offset_sec ?? 0);
   const max = Number(d.max_offset_sec ?? 0);
   const decision = d.decision ?? 'unknown';
-
+  console.log('Rendering summary', d);
   targetEl.textContent =
-    `Ref:        ${d.ref_path || d.reference || ''}\n` +
+    `Ref:        ${d.reference_path || d.reference || ''}\n` +
     `Target:     ${d.target_path || d.target || ''}\n\n` +
     `Ref lines:  ${d.ref_count ?? '-'}\n` +
     `Tgt lines:  ${d.target_count ?? '-'}\n` +
@@ -141,23 +141,6 @@ async function pollBatchProgress() {
 }
 
 setInterval(pollBatchProgress, 1000);
-
-app.get('/api/analysis/:movie', (req, res) => {
-  try {
-    const movie = req.params.movie;
-    const syncinfoPath = path.join(DATA_ROOT, 'analysis', movie, 'analysis.syncinfo');
-
-    if (!fs.existsSync(syncinfoPath)) {
-      return res.json({ ok: false, error: 'no_syncinfo' });
-    }
-
-    const data = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
-    res.json({ ok: true, data });
-  } catch (err) {
-    console.error('analysis load error:', err);
-    res.json({ ok: false, error: err.toString() });
-  }
-});
 
 // -------- MANUAL SEARCH --------
 
@@ -320,14 +303,6 @@ async function loadLibrary() {
   try {
     const res = await fetch('/api/library');
     const json = await res.json();
-
-    if (data.error === 'no_summary_file') {
-      libraryRows = [];
-      libraryTableBody.innerHTML =
-        "<tr><td colspan='5'>No summary file found.</td></tr>";
-      libNote.textContent = '';
-      return;
-    }
 
     if (!json.ok || !Array.isArray(json.rows)) {
       libraryRows = [];
@@ -617,9 +592,9 @@ async function openLibraryAnalysis(row) {
 
   try {
     const res = await fetch(`/api/analysis/${encodeURIComponent(row.movie)}`);
-    const data = await res.json();
-
-    if (!data.ok) {
+    const json = await res.json();
+    console.log('Loaded analysis for', row.movie, data);
+    if (!json.ok) {
       if (row.has_whisper) {
         librarySummaryPre.textContent =
           'Whisper reference exists, but no analysis yet.\nRun batch scan to generate analysis.';
@@ -633,17 +608,16 @@ async function openLibraryAnalysis(row) {
       if (autoCorrectBtn) autoCorrectBtn.disabled = true;
       return;
     } else {
-      currentLibraryRow = row;
-      currentLibraryAnalysis = data.data;
+      currentLibraryAnalysis = json.data;
 
       // Render summary + graph
-      renderSummary(data, librarySummaryPre);
-      drawGraph(libraryCanvas, data.clean_offsets || data.offsets || []);
+      renderSummary(json.data, librarySummaryPre);
+      drawGraph(libraryCanvas, json.data.clean_offsets || json.data.offsets || []);
     }
 
     // ----------------------------------------------------------
     // Auto-correct available when a real target subtitle exists
-    if (autoCorrectBtn && data.target_path) {
+    if (autoCorrectBtn && json.data.target_path) {
       autoCorrectBtn.disabled = false;
       autoCorrectResult.textContent =
         'Ready for auto-correction using current analysis.';

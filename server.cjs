@@ -578,19 +578,45 @@ app.get('/api/library', (req, res) => {
 });
 
 app.get('/api/analysis/:movie', (req, res) => {
-  const movie = req.params.movie;
-  const dataDir = process.env.SYNCORBIT_DATA || '/app/data';
-  const syncinfoPath = path.join(dataDir, 'analysis', movie, 'analysis.syncinfo');
-
-  if (!fs.existsSync(syncinfoPath)) {
-    return res.status(404).json({ error: 'syncinfo_not_found', movie });
-  }
-
   try {
-    const json = fs.readFileSync(syncinfoPath, 'utf8');
-    res.json(JSON.parse(json));
-  } catch (e) {
-    res.status(500).json({ error: 'bad_json', detail: String(e) });
+    const movie = req.params.movie;
+    const syncinfoPath = path.join(DATA_ROOT, 'analysis', movie, 'analysis.syncinfo');
+
+    if (!fs.existsSync(syncinfoPath)) {
+      return res.json({ ok: false, error: 'no_syncinfo' });
+    }
+
+    const raw = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
+
+    const normalized = {
+      movie,
+
+      decision: raw.decision,
+      best_reference: raw.best_reference,
+      reference_path: raw.reference_path,
+      target_path: raw.target_path,
+
+      // Canonical counts
+      anchor_count: raw.anchor_count ?? raw.raw_anchor_count,
+      ref_count: raw.ref_count,
+      target_count: raw.target_count,
+
+      // Canonical offsets (seconds)
+      avg_offset: raw.median_offset_sec ?? raw.avg_offset_sec,
+      max_offset: raw.max_offset_sec,
+      drift_span: raw.robust_drift_span_sec ?? raw.drift_span_sec,
+
+      // Graph data
+      offsets: raw.clean_offsets ?? raw.offsets,
+
+      // Optional diagnostics (keep for later UI)
+      raw: raw,
+    };
+
+    res.json({ ok: true, data: normalized });
+  } catch (err) {
+    console.error('analysis load error:', err);
+    res.json({ ok: false, error: err.toString() });
   }
 });
 
