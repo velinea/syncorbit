@@ -27,17 +27,6 @@ console.log('EXECJS_RUNTIME:', process.env.EXECJS_RUNTIME);
 app.use(express.json());
 app.use(express.static('public'));
 
-// --- Simple in-memory cache (lives until server restart) ---
-let libraryCache = null;
-let libraryCacheTime = 0; // timestamp in ms
-const LIBRARY_CACHE_TTL = 5000; // 5 seconds
-
-function invalidateLibraryCache() {
-  libraryCache = null;
-  libraryCacheTime = 0;
-  console.log('→ Library cache invalidated');
-}
-
 function loadIgnoreList() {
   try {
     return JSON.parse(fs.readFileSync(IGNORE_FILE, 'utf8'));
@@ -93,7 +82,6 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
   }
 
   saveIgnoreList(ignoreList);
-  invalidateLibraryCache();
 
   res.json({ ok: true, total: ignoreList.length });
 });
@@ -120,8 +108,6 @@ app.post('/api/bulk/touch_whisper', express.json(), (req, res) => {
       errors.push({ movie, error: String(err) });
     }
   }
-  invalidateLibraryCache();
-
   res.json({ ok: true, results, errors });
 });
 
@@ -240,8 +226,6 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
       errors.push({ movie, error: err.message });
     }
   }
-  invalidateLibraryCache();
-
   res.json({ ok: true, results, errors });
 });
 
@@ -375,7 +359,6 @@ app.post('/api/run-batch-scan', (req, res) => {
 
   let out = '';
   let err = '';
-  invalidateLibraryCache();
 
   py.stdout.on('data', d => (out += d.toString()));
   py.stderr.on('data', d => (err += d.toString()));
@@ -489,9 +472,6 @@ app.post('/api/reanalyze/:movie', async (req, res) => {
     fs.mkdirSync(syncDir, { recursive: true });
     fs.writeFileSync(syncFile, JSON.stringify(data, null, 2));
 
-    // Invalidate cache
-    libraryCache = null;
-
     return res.json({ ok: true, movie, data });
   } catch (err) {
     return res.json({ ok: false, error: err.toString() });
@@ -593,8 +573,8 @@ app.get('/api/analysis/:movie', (req, res) => {
 
       decision: raw.decision,
       best_reference: raw.best_reference,
-      reference_path: raw.reference_path,
-      target_path: raw.target_path,
+      reference_path: raw.reference_path ?? raw.ref_path ?? null,
+      target_path: raw.target_path ?? raw.target ?? null,
 
       // Canonical counts
       anchor_count: raw.anchor_count ?? raw.raw_anchor_count,

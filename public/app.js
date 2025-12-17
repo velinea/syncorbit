@@ -109,10 +109,10 @@ function renderSummary(d, targetEl = summaryPre) {
   const anchors = d.anchor_count ?? 0;
   const avg = Number(d.avg_offset_sec ?? d.avg_offset ?? 0);
   const span = Number(d.drift_span_sec ?? d.drift_span ?? 0);
-  const min = Number(d.min_offset_sec ?? 0);
-  const max = Number(d.max_offset_sec ?? 0);
+  const min = Number(d.min_offset ?? 0);
+  const max = Number(d.max_offset ?? 0);
   const decision = d.decision ?? 'unknown';
-  console.log('Rendering summary', d);
+
   targetEl.textContent =
     `Ref:        ${d.reference_path || d.reference || ''}\n` +
     `Target:     ${d.target_path || d.target || ''}\n\n` +
@@ -505,8 +505,8 @@ function renderLibraryTable() {
       <td><input type="checkbox"
       class="row-check"
       data-movie="${r.movie}" onclick="event.stopPropagation()"></td>
-      <td><div style="float-left;">${shortTitle(r.movie)}</div>
-      <div style="float-right;">${refBadge}</div></td>
+      <td><div style="float:left;">${shortTitle(r.movie)}</div>
+      <div style="float:right;">${refBadge}</div></td>
       <td>${r.anchor_count}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
