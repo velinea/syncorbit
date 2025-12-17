@@ -246,50 +246,50 @@ def main():
             elif tgt.stat().st_mtime > sync_mtime:
                 analyze = True
 
-                # --------------------------------------------------
+        # --------------------------------------------------
         # Case 1: reuse existing syncinfo
         # --------------------------------------------------
-        if not analyze:
-            try:
-                with open(syncinfo_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+        try:
+            with open(syncinfo_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-                now = time.time()
-                whisper_ref_path = REF_ROOT / movie / "ref.srt"
+            now = time.time()
+            whisper_ref_path = REF_ROOT / movie / "ref.srt"
 
-                row = {
-                    "movie": movie,
-                    "anchor_count": data.get("anchor_count"),
-                    "avg_offset": data.get("avg_offset_sec"),
-                    "drift_span": data.get("drift_span_sec"),
-                    "decision": data.get("decision"),
-                    "best_reference": data.get("best_reference"),
-                    "reference_path": data.get("reference_path"),
-                    "has_whisper": whisper_ref_path.exists(),
-                    "has_ffsubsync": has_ffsync,  # compute once earlier
-                    "fi_mtime": fi_mtime,  # compute once earlier
-                    "last_analyzed": now,
-                    "ignored": movie in ignored,
-                }
-                write_summary_row(row, SUMMARY_CSV)
+            row = {
+                "movie": movie,
+                "anchor_count": data.get("anchor_count"),
+                "avg_offset": data.get("avg_offset_sec"),
+                "drift_span": data.get("drift_span_sec"),
+                "decision": data.get("decision"),
+                "best_reference": data.get("best_reference"),
+                "reference_path": data.get("reference_path"),
+                "has_whisper": whisper_ref_path.exists(),
+                "has_ffsubsync": has_ffsync,  # compute once earlier
+                "fi_mtime": fi_mtime,  # compute once earlier
+                "last_analyzed": now,
+                "ignored": movie in ignored,
+            }
+            write_summary_row(row, SUMMARY_CSV)
 
-                continue
-            except Exception as e:
-                analyze = True
+            continue
+        except Exception as e:
+            analyze = True
 
         # --------------------------------------------------
         # Case 2: Need to run aligner
         # --------------------------------------------------
+        if not analyze:
 
-        try:
-            data = run_align(ref, tgt)
-            data["best_reference"] = ref_type
-            data["reference_path"] = str(ref)
-        except Exception as e:
-            print(f"ERROR:", e)
-            continue
+            try:
+                data = run_align(ref, tgt)
+                data["best_reference"] = ref_type
+                data["reference_path"] = str(ref)
+            except Exception as e:
+                print(f"ERROR:", e)
+                continue
 
-        write_syncinfo(movie, data)
+            write_syncinfo(movie, data)
 
     print("Batch scan complete.")
     update_progress("Done", total, total)

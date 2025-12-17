@@ -306,7 +306,7 @@ async function loadLibrary() {
 
     if (!json.ok || !Array.isArray(json.rows)) {
       libraryRows = [];
-      libraryTableBody.innerHTML = "<tr><td colspan='7'>Unexpected response.</td></tr>";
+      libraryTableBody.innerHTML = "<tr><td colspan='8'>Unexpected response.</td></tr>";
       return;
     }
 
@@ -439,7 +439,7 @@ runBatchScanBtn.addEventListener('click', async () => {
     libNote.textContent = 'Error: ' + err.message;
   }
 
-  runBatchScanBtn.textContent = 'Run Library Scan';
+  runBatchScanBtn.textContent = 'Scan Library';
   runBatchScanBtn.disabled = false;
 });
 
@@ -505,8 +505,8 @@ function renderLibraryTable() {
       <td><input type="checkbox"
       class="row-check"
       data-movie="${r.movie}" onclick="event.stopPropagation()"></td>
-      <td><div style="float:left;">${shortTitle(r.movie)}</div>
-      <div style="float:right;">${refBadge}</div></td>
+      <td>${shortTitle(r.movie)}</td>
+      <td>${refBadge}</td>
       <td>${r.anchor_count}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
@@ -661,7 +661,7 @@ bulkBtn.addEventListener('click', () => {
     x => x.dataset.movie
   );
 
-  text.textContent = `<b>Selected movies:\n${selectedMovies.join('\n')}`;
+  text.textContent = `Selected movies:\n${selectedMovies.join('\n')}`;
 
   currentBulkSelection = selectedMovies; // store for “Run” button
   bulkModal.style.display = 'block';

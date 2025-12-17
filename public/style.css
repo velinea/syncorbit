@@ -451,7 +451,7 @@ button:disabled {
   background: #16a34a;
 }
 .ref-badge {
-  display: inline-block;
+  float: right;
   padding: 2px 6px;
   margin-left: 5px;
   border-radius: 4px;
