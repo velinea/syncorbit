@@ -585,21 +585,19 @@ function renderLibraryTable() {
 
 function updateLibraryRow(movie, row, data) {
   // Update cells (directly)
-  row.querySelector('td:nth-child(3)').textContent = data.anchor_count ?? '';
-  row.querySelector('td:nth-child(4)').textContent = safe(data.avg_offset_sec) ?? '';
-  row.querySelector('td:nth-child(5)').textContent = safe(data.drift_span_sec) ?? '';
+  row.querySelector('td:nth-child(5)').textContent = data.anchor_count ?? '';
+  row.querySelector('td:nth-child(6)').textContent = safe(data.avg_offset_sec) ?? '';
+  row.querySelector('td:nth-child(7)').textContent = safe(data.drift_span_sec) ?? '';
 
   // Update decision cell
-  const decisionCell = row.querySelector('td:nth-child(6)');
+  const decisionCell = row.querySelector('td:nth-child(8)');
   const decision = data.decision || 'unknown';
 
   decisionCell.innerHTML = shortStatus(decision);
 
   // Update badges if needed
-  const titleCell = row.querySelector('td:nth-child(2)');
-  titleCell.innerHTML =
-    shortTitle(movie) +
-    ' ' +
+  const badgeCell = row.querySelector('td:nth-child(4)');
+  badgeCell.innerHTML =
     (data.best_reference === 'whisper'
       ? `<span class="ref-badge ref-whisper">Whisper</span>`
       : '') +

@@ -247,7 +247,22 @@ def main():
                 analyze = True
 
         # --------------------------------------------------
-        # Case 1: reuse existing syncinfo
+        # Case 1: Need to run aligner
+        # --------------------------------------------------
+        if analyze:
+
+            try:
+                data = run_align(ref, tgt)
+                data["best_reference"] = ref_type
+                data["reference_path"] = str(ref)
+            except Exception as e:
+                print(f"ERROR:", e)
+                continue
+
+            write_syncinfo(movie, data)
+
+        # --------------------------------------------------
+        # Case 2: reuse existing syncinfo
         # --------------------------------------------------
         try:
             with open(syncinfo_path, "r", encoding="utf-8") as f:
@@ -275,21 +290,6 @@ def main():
             continue
         except Exception as e:
             analyze = True
-
-        # --------------------------------------------------
-        # Case 2: Need to run aligner
-        # --------------------------------------------------
-        if not analyze:
-
-            try:
-                data = run_align(ref, tgt)
-                data["best_reference"] = ref_type
-                data["reference_path"] = str(ref)
-            except Exception as e:
-                print(f"ERROR:", e)
-                continue
-
-            write_syncinfo(movie, data)
 
     print("Batch scan complete.")
     update_progress("Done", total, total)
