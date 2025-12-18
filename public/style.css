@@ -338,7 +338,7 @@ button:disabled {
 
 #libraryArea {
   display: grid;
-  grid-template-columns: 620px auto;
+  grid-template-columns: 650px auto;
   gap: 6px;
   margin-top: 14px;
 }

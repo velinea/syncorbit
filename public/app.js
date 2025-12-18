@@ -100,8 +100,16 @@ function clearLibraryGraph() {
   clearCanvas(libraryCanvas);
 }
 
-function safe(v, digits = 2) {
-  return typeof v === 'number' && !isNaN(v) ? v.toFixed(digits) : '–';
+function safe(v, maxDigits = 2) {
+  if (typeof v !== 'number' || isNaN(v)) return '–';
+
+  const abs = Math.abs(v);
+
+  if (abs > 0 && abs < 0.1) {
+    return v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  return Number(v.toPrecision(maxDigits)).toString();
 }
 
 // Render summary into a target <pre>
@@ -500,9 +508,6 @@ function renderLibraryTable() {
 
   limited.forEach(r => {
     const tr = document.createElement('tr');
-    if (r.movie === r.moviestartsWith('mother')) {
-      console.log('Rendering row for', r.movie);
-    }
     let refBadge = '';
 
     if (r.best_reference === 'whisper') {
@@ -579,7 +584,6 @@ function renderLibraryTable() {
 }
 
 function updateLibraryRow(movie, row, data) {
-  console.log('Updating row for', movie, data);
   // Update cells (directly)
   row.querySelector('td:nth-child(3)').textContent = data.anchor_count ?? '';
   row.querySelector('td:nth-child(4)').textContent = safe(data.avg_offset_sec) ?? '';
@@ -615,7 +619,6 @@ async function openLibraryAnalysis(row) {
   try {
     const res = await fetch(`/api/analysis/${encodeURIComponent(row.movie)}`);
     const json = await res.json();
-    console.log('Loaded analysis for', row.movie, json.data);
     if (!json.ok) {
       if (row.has_whisper) {
         librarySummaryPre.textContent =
