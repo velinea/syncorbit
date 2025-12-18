@@ -36,8 +36,8 @@ const tabViews = document.querySelectorAll('.tab');
 // State
 let searchTimer = null;
 let libraryRows = [];
-let librarySortKey = 'movie';
-let librarySortDir = 'asc';
+let librarySortKey = 'fi_mtime';
+let librarySortDir = 'desc';
 let currentLibraryRow = null;
 let currentLibraryAnalysis = null;
 let currentBulkSelection = [];
@@ -123,6 +123,20 @@ function renderSummary(d, targetEl = summaryPre) {
     `Drift span: ${span.toFixed(3)} s\n` +
     `Min / Max:  ${min.toFixed(3)} s  /  ${max.toFixed(3)} s\n` +
     `Decision:   ${decision}`;
+}
+
+function daysAgoFromUnix(ts) {
+  if (!ts) return null;
+  const nowSec = Date.now() / 1000;
+  const days = Math.floor((nowSec - ts) / 86400);
+  return days < 0 ? 0 : days;
+}
+
+function formatDaysAgo(ts) {
+  const days = daysAgoFromUnix(ts);
+  if (days == null) return '—';
+  if (days === 0) return 'today';
+  return `${days}d`;
 }
 
 // -------- BATCH PROGRESS POLLING --------
@@ -486,7 +500,9 @@ function renderLibraryTable() {
 
   limited.forEach(r => {
     const tr = document.createElement('tr');
-
+    if (r.movie === r.moviestartsWith('mother')) {
+      console.log('Rendering row for', r.movie);
+    }
     let refBadge = '';
 
     if (r.best_reference === 'whisper') {
@@ -505,6 +521,11 @@ function renderLibraryTable() {
       <td><input type="checkbox"
       class="row-check"
       data-movie="${r.movie}" onclick="event.stopPropagation()"></td>
+      <td class="recent-col" title="${
+        r.fi_mtime ? new Date(r.fi_mtime * 1000).toLocaleString() : 'No FI subtitle'
+      }">
+      ${formatDaysAgo(r.fi_mtime)}
+      </td>
       <td>${shortTitle(r.movie)}</td>
       <td>${refBadge}</td>
       <td>${r.anchor_count}</td>
