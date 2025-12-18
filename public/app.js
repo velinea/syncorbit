@@ -100,16 +100,24 @@ function clearLibraryGraph() {
   clearCanvas(libraryCanvas);
 }
 
-function safe(v, maxDigits = 2) {
+function safe(v) {
   if (typeof v !== 'number' || isNaN(v)) return '–';
 
   const abs = Math.abs(v);
 
-  if (abs > 0 && abs < 0.1) {
-    return v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  // >= 1000 → integer, no decimals
+  if (abs >= 1000) {
+    return Math.round(v).toString();
   }
 
-  return Number(v.toPrecision(maxDigits)).toString();
+  // Determine decimals needed to reach 3 digits
+  if (abs >= 100) {
+    return v.toFixed(0); // 123
+  }
+  if (abs >= 10) {
+    return v.toFixed(1); // 64.0
+  }
+  return v.toFixed(2); // 9.00, 0.10, 0.00
 }
 
 // Render summary into a target <pre>
@@ -117,8 +125,8 @@ function renderSummary(d, targetEl = summaryPre) {
   const anchors = d.anchor_count ?? 0;
   const avg = Number(d.avg_offset_sec ?? d.avg_offset ?? 0);
   const span = Number(d.drift_span_sec ?? d.drift_span ?? 0);
-  const min = Number(d.min_offset ?? 0);
-  const max = Number(d.max_offset ?? 0);
+  const min = Number(d.min_offset_sec ?? d.min_offset ?? 0);
+  const max = Number(d.max_offset_sec ?? d.max_offset ?? 0);
   const decision = d.decision ?? 'unknown';
 
   targetEl.textContent =
