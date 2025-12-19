@@ -18,6 +18,36 @@ const IGNORE_FILE = path.join(
   process.env.SYNCORBIT_DATA || '/app/data',
   'ignore_list.json'
 );
+
+// Prepared statements
+const upsertMovieStmt = db.prepare(`
+  INSERT INTO movies (
+    movie, anchor_count, avg_offset, drift_span, decision,
+    best_reference, reference_path,
+    has_whisper, has_ffsubsync,
+    fi_mtime, last_analyzed, ignored
+  ) VALUES (
+    @movie, @anchor_count, @avg_offset, @drift_span, @decision,
+    @best_reference, @reference_path,
+    @has_whisper, @has_ffsubsync,
+    @fi_mtime, @last_analyzed, @ignored
+  )
+  ON CONFLICT(movie) DO UPDATE SET
+    anchor_count=excluded.anchor_count,
+    avg_offset=excluded.avg_offset,
+    drift_span=excluded.drift_span,
+    decision=excluded.decision,
+    best_reference=excluded.best_reference,
+    reference_path=excluded.reference_path,
+    has_whisper=excluded.has_whisper,
+    has_ffsubsync=excluded.has_ffsubsync,
+    fi_mtime=excluded.fi_mtime,
+    last_analyzed=excluded.last_analyzed,
+    ignored=excluded.ignored
+`);
+
+const getMovieStmt = db.prepare(`SELECT * FROM movies WHERE movie = ?`);
+
 // Ensure PATH & EXECJS runtime preference are correct for ffsubsync + PyExecJS
 process.env.EXECJS_RUNTIME = 'Node';
 // Force system node (CJS) to appear first in PATH
@@ -28,6 +58,44 @@ console.log('EXECJS_RUNTIME:', process.env.EXECJS_RUNTIME);
 
 app.use(express.json());
 app.use(express.static('public'));
+
+// --------------------------
+// Helper functions
+// -------------------------
+
+function findFiSubtitleMtime(movieDir) {
+  try {
+    const files = fs.readdirSync(movieDir);
+    for (const f of files) {
+      const lc = f.toLowerCase();
+      if (lc.endsWith('.fi.srt') || lc.endsWith('.fin.srt')) {
+        return Math.floor(fs.statSync(path.join(movieDir, f)).mtimeMs / 1000);
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function hasFfsubsync(movie) {
+  try {
+    const dir = path.join(DATA_ROOT, 'resync', movie);
+    if (!fs.existsSync(dir)) return 0;
+    return fs.readdirSync(dir).some(f => f.toLowerCase().endsWith('.synced.srt'))
+      ? 1
+      : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function hasWhisper(movie) {
+  try {
+    const p = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
+    return fs.existsSync(p) ? 1 : 0;
+  } catch {
+    return 0;
+  }
+}
 
 function loadIgnoreList() {
   try {
@@ -474,7 +542,62 @@ app.post('/api/reanalyze/:movie', async (req, res) => {
     fs.mkdirSync(syncDir, { recursive: true });
     fs.writeFileSync(syncFile, JSON.stringify(data, null, 2));
 
-    return res.json({ ok: true, movie, data });
+    // -------------------------------------------------------
+    //  WRITE RESULT INTO SQLITE (CANONICAL STATE)
+    // -------------------------------------------------------
+    const now = Math.floor(Date.now() / 1000);
+
+    const fiMtime = findFiSubtitleMtime(movieDir);
+
+    // Preserve ignored flag if already present
+    let ignoredFlag = 0;
+    try {
+      const row = getMovieStmt.get(movie);
+      if (row && row.ignored) ignoredFlag = 1;
+    } catch {}
+
+    const row = {
+      movie,
+
+      anchor_count: data.anchor_count ?? data.raw_anchor_count ?? 0,
+      avg_offset: data.median_offset_sec ?? data.avg_offset_sec ?? 0,
+      drift_span:
+        data.robust_drift_span_sec ??
+        data.drift_span_sec ??
+        data.raw_drift_span_sec ??
+        0,
+
+      decision: data.decision ?? 'unknown',
+
+      best_reference: refType,
+      reference_path: ref,
+
+      has_whisper: hasWhisper(movie),
+      has_ffsubsync: hasFfsubsync(movie),
+
+      fi_mtime: fiMtime,
+      last_analyzed: now,
+      ignored: ignoredFlag,
+    };
+
+    upsertMovieStmt.run(row);
+
+    // Read back normalized row for UI
+    const stored = getMovieStmt.get(movie);
+    if (stored) {
+      stored.has_whisper = !!stored.has_whisper;
+      stored.has_ffsubsync = !!stored.has_ffsubsync;
+      stored.ignored = !!stored.ignored;
+    }
+
+    // -------------------------------------------------------
+    //  RETURN UPDATED ROW TO UI
+    // -------------------------------------------------------
+    return res.json({
+      ok: true,
+      movie,
+      row: stored || row,
+    });
   } catch (err) {
     return res.json({ ok: false, error: err.toString() });
   }
