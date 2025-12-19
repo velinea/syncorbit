@@ -4,7 +4,7 @@ Batch scanner for SyncOrbit.
 
 Creates:
     /app/data/analysis/<movie>/analysis.syncinfo
-    /app/data/syncorbit_library_summary.csv
+    /app/data/syncorbit_library_export.csv
 
 Prefers WhisperX reference in:
     /app/data/ref/<movie>/ref.srt
@@ -30,7 +30,7 @@ DB_PATH = DATA_ROOT / "syncorbit.db"
 ANALYSIS_ROOT = DATA_ROOT / "analysis"
 REF_ROOT = DATA_ROOT / "ref"
 RESYNC_ROOT = DATA_ROOT / "resync"
-SUMMARY_CSV = DATA_ROOT / "syncorbit_library_summary.csv"
+SUMMARY_CSV = DATA_ROOT / "syncorbit_library_export.csv"
 IGNORE_FILE = DATA_ROOT / "ignore_list.json"
 PROGRESS_FILE = DATA_ROOT / "batch_progress.json"
 

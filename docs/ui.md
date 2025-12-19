@@ -2,7 +2,7 @@
 
     batch_scan.py
     ↓
-    syncorbit_library_summary.csv
+    SQLite db (syncorbit_library_export.csv)
     ↓
     /api/library
     ↓

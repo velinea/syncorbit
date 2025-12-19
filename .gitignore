@@ -1,7 +1,7 @@
 .venv
 node_modules
 subs
-syncorbit_library_summary.csv
+syncorbit_library_*.csv
 whisper.cpp
 pyproject.toml
 .eslintrc.cjs

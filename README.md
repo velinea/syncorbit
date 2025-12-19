@@ -12,7 +12,7 @@
 
 - Anchor detection & drift measurement
 - Per-movie sync status overview
-- CSV-based summary for fast loading
+- SQLite-based summary for fast loading
 
 ### 🧠 Multiple reference strategies
 
@@ -40,7 +40,9 @@
 
 ### 🐳 Docker-based architecture
 
-- Node.js backendPython alignment engine
+- Node.js backend
+- Python alignment engine
+- library is backed by SQLite
 - Clean separation of media, analysis, and generated data
 
 ### 🏗️ Architecture Overview
@@ -80,7 +82,7 @@
   ├── ref/             # Whisper references
   ├── resync/          # ffsubsync outputs
   ├── ignore_list.json
-  └── syncorbit_library_summary.csv
+  └── syncorbit_library_export.csv
 ```
 
 ### 🚀 Getting Started

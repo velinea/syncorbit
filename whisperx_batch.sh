@@ -3,7 +3,7 @@ set -e
 
 MOVIES="/mnt/media/Movies"
 DATA="/mnt/media/whisperx"
-SYNCORBIT_CSV="$DATA/syncorbit_library_summary.csv"
+SYNCORBIT_CSV="$DATA/syncorbit_library_export.csv"
 LOG="./whisperx_batch.log"
 IGNORE_FILE="$DATA/ignore_list.json"
 
