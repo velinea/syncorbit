@@ -553,14 +553,13 @@ function renderLibraryTable() {
     document.querySelectorAll('.reanalyze-btn').forEach(btn => {
       btn.onclick = async () => {
         const movie = btn.dataset.movie;
-        const row = btn.closest('tr');
-        const spinner = row.querySelector(`.reanalyze-status`);
+        const tr = btn.closest('tr');
+        const spinner = tr.querySelector('.reanalyze-status');
 
         // Show spinner
         spinner.innerHTML = `<span class="reanalyze-spinner"></span>`;
         btn.disabled = true;
 
-        // Call backend
         const res = await fetch(`/api/reanalyze/${encodeURIComponent(movie)}`, {
           method: 'POST',
         });
@@ -575,8 +574,8 @@ function renderLibraryTable() {
           return;
         }
 
-        // Update only this row using fresh data
-        updateLibraryRow(movie, row, json.data);
+        // ✅ Correct: update row with library schema
+        updateLibraryRow(tr, json.row);
       };
     });
 
@@ -588,11 +587,11 @@ function renderLibraryTable() {
   });
 }
 
-function updateLibraryRow(movie, row, data) {
+function updateLibraryRow(row, data) {
   // Update cells (directly)
   row.querySelector('td:nth-child(5)').textContent = data.anchor_count ?? '';
-  row.querySelector('td:nth-child(6)').textContent = safe(data.avg_offset_sec) ?? '';
-  row.querySelector('td:nth-child(7)').textContent = safe(data.drift_span_sec) ?? '';
+  row.querySelector('td:nth-child(6)').textContent = safe(data.avg_offset) ?? '';
+  row.querySelector('td:nth-child(7)').textContent = safe(data.drift_span) ?? '';
 
   // Update decision cell
   const decisionCell = row.querySelector('td:nth-child(8)');
