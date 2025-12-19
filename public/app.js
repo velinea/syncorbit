@@ -160,14 +160,11 @@ async function pollBatchProgress() {
   const res = await fetch('/api/batch_progress');
   const p = await res.json();
 
-  if (!p.running) {
-    document.getElementById('batchStatus').textContent = 'Idle';
-    return;
+  if (p.running) {
+    document.getElementById(
+      'batchStatus'
+    ).textContent = `Scanning ${p.index}/${p.total}: ${p.current_movie}`;
   }
-
-  document.getElementById(
-    'batchStatus'
-  ).textContent = `Scanning ${p.index}/${p.total}: ${p.current_movie}`;
 }
 
 setInterval(pollBatchProgress, 1000);

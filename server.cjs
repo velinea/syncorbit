@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const { exec } = require('child_process');
+const { db, initDb } = require('./db.cjs');
+initDb();
 
 const app = express();
 const PY = '/app/.venv/bin/python3';
@@ -26,6 +28,27 @@ console.log('EXECJS_RUNTIME:', process.env.EXECJS_RUNTIME);
 
 app.use(express.json());
 app.use(express.static('public'));
+
+app.get('/api/library_db', (req, res) => {
+  try {
+    const rows = db
+      .prepare(`SELECT * FROM movies ORDER BY COALESCE(fi_mtime, 0) DESC`)
+      .all();
+
+    // Normalize sqlite ints into booleans for UI
+    const out = rows.map(r => ({
+      ...r,
+      has_whisper: !!r.has_whisper,
+      has_ffsubsync: !!r.has_ffsubsync,
+      ignored: !!r.ignored,
+    }));
+
+    res.json({ ok: true, rows: out });
+  } catch (err) {
+    console.error('api/library_db error:', err);
+    res.json({ ok: false, error: err.toString() });
+  }
+});
 
 function loadIgnoreList() {
   try {
