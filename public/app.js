@@ -120,6 +120,16 @@ function safe(v) {
   return v.toFixed(2); // 9.00, 0.10, 0.00
 }
 
+function shortTitle(t) {
+  return t.length > 30 ? t.slice(0, 27) + '…' : t;
+}
+
+function shortStatus(s) {
+  if (s === 'synced') return '<div id="status-synced"></div>';
+  if (s === 'needs_adjustment') return '<div id="status-adjust"></div>';
+  return '<div id="status-bad"></div>';
+}
+
 // Render summary into a target <pre>
 function renderSummary(d, targetEl = summaryPre) {
   const anchors = d.anchor_count ?? 0;
@@ -436,16 +446,6 @@ document.querySelectorAll('#libraryTable thead th[data-sort]').forEach(th => {
   });
 });
 
-function shortTitle(t) {
-  return t.length > 30 ? t.slice(0, 27) + '…' : t;
-}
-
-function shortStatus(s) {
-  if (s === 'synced') return '<div id="status-synced"></div>';
-  if (s === 'needs_adjustment') return '<div id="status-adjust"></div>';
-  return '<div id="status-bad"></div>';
-}
-
 const runBatchScanBtn = document.getElementById('runBatchScanBtn');
 
 runBatchScanBtn.addEventListener('click', async () => {
@@ -550,36 +550,13 @@ function renderLibraryTable() {
       &#128472;</button>
       </td>
     `;
-    document.querySelectorAll('.reanalyze-btn').forEach(btn => {
-      btn.onclick = async () => {
-        const movie = btn.dataset.movie;
-        const tr = btn.closest('tr');
-        const spinner = tr.querySelector('.reanalyze-status');
 
-        // Show spinner
-        spinner.innerHTML = `<span class="reanalyze-spinner"></span>`;
-        btn.disabled = true;
+    tr.addEventListener('click', e => {
+      // Ignore clicks on controls inside the row
+      if (e.target.closest('.reanalyze-btn')) return;
+      if (e.target.closest('.row-check')) return;
+      if (e.target.closest('button')) return;
 
-        const res = await fetch(`/api/reanalyze/${encodeURIComponent(movie)}`, {
-          method: 'POST',
-        });
-        const json = await res.json();
-
-        // Hide spinner
-        spinner.innerHTML = '';
-        btn.disabled = false;
-
-        if (!json.ok) {
-          alert('Re-analyze failed: ' + json.error);
-          return;
-        }
-
-        // ✅ Correct: update row with library schema
-        updateLibraryRow(tr, json.row);
-      };
-    });
-
-    tr.addEventListener('click', () => {
       openLibraryAnalysis(r);
     });
 
@@ -691,6 +668,42 @@ bulkBtn.addEventListener('click', () => {
 
   currentBulkSelection = selectedMovies; // store for “Run” button
   bulkModal.style.display = 'block';
+});
+
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('.reanalyze-btn');
+  if (!btn) return;
+
+  const movie = btn.dataset.movie;
+  const tr = btn.closest('tr');
+  const spinner = tr.querySelector('.reanalyze-status');
+
+  // Guard
+  if (!movie || !tr) return;
+
+  // Show spinner
+  spinner.innerHTML = `<span class="reanalyze-spinner"></span>`;
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/reanalyze/${encodeURIComponent(movie)}`, {
+      method: 'POST',
+    });
+    const json = await res.json();
+
+    if (!json.ok) {
+      alert('Re-analyze failed: ' + json.error);
+      return;
+    }
+
+    // ✅ Update this row only
+    updateLibraryRow(tr, json.row);
+  } catch (err) {
+    alert('Re-analyze error: ' + err.message);
+  } finally {
+    spinner.innerHTML = '';
+    btn.disabled = false;
+  }
 });
 
 document.getElementById('bulkModalClose').onclick = () => {
