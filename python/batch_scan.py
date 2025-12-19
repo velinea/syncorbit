@@ -12,6 +12,7 @@ Prefers WhisperX reference in:
 Falls back to EN/FI subtitle pairs inside /app/media.
 """
 
+import sqlite3
 import csv
 import json
 import os
@@ -24,6 +25,7 @@ from pathlib import Path
 # ----------------------------
 MEDIA_ROOT = Path("/app/media")  # read-only mount
 DATA_ROOT = Path(os.environ.get("SYNCORBIT_DATA", "/app/data"))
+DB_PATH = DATA_ROOT / "syncorbit.db"
 
 ANALYSIS_ROOT = DATA_ROOT / "analysis"
 REF_ROOT = DATA_ROOT / "ref"
@@ -53,6 +55,62 @@ CSV_FIELDS = [
 # ----------------------------
 # Helpers
 # ----------------------------
+
+
+def upsert_movie_row(row: dict):
+    con = sqlite3.connect(DB_PATH)
+    try:
+        con.execute(
+            """
+          CREATE TABLE IF NOT EXISTS movies (
+            movie TEXT PRIMARY KEY,
+            anchor_count INTEGER,
+            avg_offset REAL,
+            drift_span REAL,
+            decision TEXT,
+            best_reference TEXT,
+            reference_path TEXT,
+            has_whisper INTEGER DEFAULT 0,
+            has_ffsubsync INTEGER DEFAULT 0,
+            fi_mtime INTEGER,
+            last_analyzed INTEGER,
+            ignored INTEGER DEFAULT 0
+          )
+        """
+        )
+
+        con.execute(
+            """
+          INSERT INTO movies (
+            movie, anchor_count, avg_offset, drift_span, decision,
+            best_reference, reference_path,
+            has_whisper, has_ffsubsync,
+            fi_mtime, last_analyzed, ignored
+          ) VALUES (
+            :movie, :anchor_count, :avg_offset, :drift_span, :decision,
+            :best_reference, :reference_path,
+            :has_whisper, :has_ffsubsync,
+            :fi_mtime, :last_analyzed, :ignored
+          )
+          ON CONFLICT(movie) DO UPDATE SET
+            anchor_count=excluded.anchor_count,
+            avg_offset=excluded.avg_offset,
+            drift_span=excluded.drift_span,
+            decision=excluded.decision,
+            best_reference=excluded.best_reference,
+            reference_path=excluded.reference_path,
+            has_whisper=excluded.has_whisper,
+            has_ffsubsync=excluded.has_ffsubsync,
+            fi_mtime=excluded.fi_mtime,
+            last_analyzed=excluded.last_analyzed,
+            ignored=excluded.ignored
+        """,
+            row,
+        )
+
+        con.commit()
+    finally:
+        con.close()
 
 
 def load_ignore_list():
@@ -286,6 +344,7 @@ def main():
                 "ignored": movie in ignored,
             }
             write_summary_row(row, SUMMARY_CSV)
+            upsert_movie_row(row)
 
             continue
         except Exception as e:
