@@ -467,45 +467,57 @@ app.post('/api/reanalyze/:movie', async (req, res) => {
   // --- Reference selection ---
   const whisperRef = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
   const resyncDir = path.join(DATA_ROOT, 'resync', movie);
-
-  let ref = null;
-  let tgt = null;
-  let refType = null;
+  const refCandidates = [];
 
   // Whisper
   if (fs.existsSync(whisperRef)) {
-    ref = whisperRef;
-    refType = 'whisper';
+    refCandidates.push({
+      path: whisperRef,
+      type: 'whisper',
+      mtime: fs.statSync(whisperRef).mtimeMs,
+    });
   }
 
   // ffsubsync
-  if (!ref && fs.existsSync(resyncDir)) {
-    const ffsyncCandidates = fs
+  if (fs.existsSync(resyncDir)) {
+    const ffsyncFiles = fs
       .readdirSync(resyncDir)
       .filter(f => f.endsWith('.synced.srt'));
-    if (ffsyncCandidates.length > 0) {
-      ref = path.join(resyncDir, ffsyncCandidates[0]);
-      refType = 'ffsync';
+
+    for (const f of ffsyncFiles) {
+      const p = path.join(resyncDir, f);
+      refCandidates.push({
+        path: p,
+        type: 'ffsync',
+        mtime: fs.statSync(p).mtimeMs,
+      });
     }
   }
 
   // EN fallback
-  if (!ref) {
-    const list = fs.readdirSync(movieDir);
-    const en = list.find(
-      f => f.toLowerCase().endsWith('.en.srt') || f.toLowerCase().endsWith('.eng.srt')
-    );
+  const list = fs.readdirSync(movieDir);
+  const en = list.find(
+    f => f.toLowerCase().endsWith('.en.srt') || f.toLowerCase().endsWith('.eng.srt')
+  );
 
-    if (!en) {
-      return res.json({ ok: false, error: 'no_english_reference' });
-    }
-
-    ref = path.join(movieDir, en);
-    refType = 'en';
+  if (en) {
+    const p = path.join(movieDir, en);
+    refCandidates.push({
+      path: p,
+      type: 'en',
+      mtime: fs.statSync(p).mtimeMs,
+    });
+  }
+  if (refCandidates.length === 0) {
+    return res.json({ ok: false, error: 'no_reference_found' });
   }
 
+  refCandidates.sort((a, b) => b.mtime - a.mtime);
+
+  const { path: ref, type: refType } = refCandidates[0];
+
   // --- FI target ---
-  const list = fs.readdirSync(movieDir);
+  let tgt = null;
   const fi = list.find(
     f => f.toLowerCase().endsWith('.fi.srt') || f.toLowerCase().endsWith('.fin.srt')
   );
