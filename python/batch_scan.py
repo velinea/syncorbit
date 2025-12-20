@@ -248,7 +248,9 @@ def main():
     # print(f"Scanning library: {MEDIA_ROOT}")
     # Mark batch scan as started
     update_progress("Starting...", 0, 0)
-    total = len([d for d in MEDIA_ROOT.iterdir() if d.is_dir()])
+    total = len(
+        [d for d in MEDIA_ROOT.iterdir() if d.is_dir() and not d.name.startswith(".")]
+    )
 
     for i, folder in enumerate(sorted(MEDIA_ROOT.iterdir()), 1):
         if not folder.is_dir():
