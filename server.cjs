@@ -811,4 +811,55 @@ app.get('/api/listsubs/:movie', async (req, res) => {
   });
 });
 
+app.get('/api/db/stats', (req, res) => {
+  try {
+    const total = db
+      .prepare(
+        `
+      SELECT COUNT(*) AS n FROM movies
+    `
+      )
+      .get().n;
+
+    const byDecision = db
+      .prepare(
+        `
+      SELECT decision, COUNT(*) AS n
+      FROM movies
+      GROUP BY decision
+    `
+      )
+      .all();
+
+    const ignored = db
+      .prepare(
+        `
+      SELECT COUNT(*) AS n FROM movies WHERE ignored = 1
+    `
+      )
+      .get().n;
+
+    const stats = {
+      total,
+      ignored,
+      decisions: {
+        synced: 0,
+        drifted: 0,
+        unknown: 0,
+      },
+    };
+
+    for (const r of byDecision) {
+      if (r.decision in stats.decisions) {
+        stats.decisions[r.decision] = r.n;
+      }
+    }
+
+    res.json({ ok: true, stats });
+  } catch (err) {
+    console.error('/api/db/stats failed:', err);
+    res.json({ ok: false, error: err.toString() });
+  }
+});
+
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'));

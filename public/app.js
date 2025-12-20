@@ -58,6 +58,7 @@ tabButtons.forEach(btn => {
     // Lazy-load library on first show
     if (target === 'library' && libraryRows.length === 0) {
       loadLibrary();
+      loadLibraryStats();
     }
   });
 });
@@ -580,10 +581,10 @@ function updateLibraryRow(row, data) {
   const badgeCell = row.querySelector('td:nth-child(4)');
   badgeCell.innerHTML =
     (data.best_reference === 'whisper'
-      ? `<span class="ref-badge ref-whisper">Whisper</span>`
+      ? `<span class="ref-badge ref-whisper">whisper</span>`
       : '') +
     (data.best_reference === 'ffsync'
-      ? `<span class="ref-badge ref-ffsync">FFSync</span>`
+      ? `<span class="ref-badge ref-ffsync">ffsync</span>`
       : '') +
     (data.best_reference === 'en' ? `<span class="ref-badge ref-en">en</span>` : '');
 }
@@ -645,6 +646,23 @@ document.addEventListener('change', e => {
     updateSelectionState();
   }
 });
+
+async function loadLibraryStats() {
+  try {
+    const res = await fetch('/api/db/stats');
+    const json = await res.json();
+    if (!json.ok) return;
+
+    const s = json.stats;
+
+    document.getElementById('libraryStats').textContent =
+      `${s.total} movies · ` +
+      `${s.decisions.synced} synced · ` +
+      `${s.decisions.drifted} drifted · ` +
+      `${s.decisions.unknown} unknown · ` +
+      `${s.ignored} ignored`;
+  } catch {}
+}
 
 function updateSelectionState() {
   const selected = document.querySelectorAll('.row-check:checked').length;
@@ -764,6 +782,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   document.getElementById('bulkModal').style.display = 'none';
   updateSelectionState();
   loadLibrary(); // refresh table
+  loadLibraryStats();
 };
 
 function renderFfsubsyncResults(results) {
@@ -827,3 +846,4 @@ clearLibraryGraph();
 
 // Optionally load library immediately on first load (library tab is default)
 loadLibrary();
+loadLibraryStats();
