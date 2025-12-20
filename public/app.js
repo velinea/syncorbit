@@ -658,8 +658,8 @@ async function loadLibraryStats() {
     document.getElementById('libraryStats').textContent =
       `${s.total} movies · ` +
       `${s.decisions.synced} synced · ` +
-      `${s.decisions.drifted} drifted · ` +
-      `${s.decisions.unknown} unknown · ` +
+      `${s.decisions.drifted} poor · ` +
+      `${s.decisions.unknown} bad · ` +
       `${s.ignored} ignored`;
   } catch {}
 }

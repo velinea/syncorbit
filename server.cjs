@@ -831,6 +831,11 @@ app.get('/api/db/stats', (req, res) => {
       )
       .all();
 
+    const decisions = {};
+    for (const r of byDecision) {
+      decisions[r.decision || 'unknown'] = r.n;
+    }
+
     const ignored = db
       .prepare(
         `
@@ -842,11 +847,7 @@ app.get('/api/db/stats', (req, res) => {
     const stats = {
       total,
       ignored,
-      decisions: {
-        synced: 0,
-        drifted: 0,
-        unknown: 0,
-      },
+      decisions,
     };
 
     for (const r of byDecision) {

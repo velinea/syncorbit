@@ -257,6 +257,23 @@ def main():
         movie = folder.name
         if movie in ignored:
             print(f"→ Skipping (ignored): {movie}")
+
+            row = {
+                "movie": movie,
+                "anchor_count": None,
+                "avg_offset": None,
+                "drift_span": None,
+                "decision": "unprocessed",
+                "best_reference": None,
+                "reference_path": None,
+                "has_whisper": int(whisper_ref_path.exists()),
+                "has_ffsubsync": 0,
+                "fi_mtime": fi_mtime,
+                "last_analyzed": None,
+                "ignored": 1,
+            }
+
+            upsert_movie_row(row)
             continue
 
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
@@ -341,7 +358,7 @@ def main():
                 "has_ffsubsync": has_ffsync,  # compute once earlier
                 "fi_mtime": fi_mtime,  # compute once earlier
                 "last_analyzed": now,
-                "ignored": movie in ignored,
+                "ignored": 1 if movie in ignored else 0,
             }
             write_summary_row(row, SUMMARY_CSV)
             upsert_movie_row(row)
