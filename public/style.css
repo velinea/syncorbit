@@ -10,7 +10,7 @@ body {
 main {
   max-width: 1700px; /* expanded */
   margin: 0 auto;
-  padding: 10px;
+  padding: 0 10px 0 10px;
 }
 
 header {
@@ -91,10 +91,38 @@ h1 {
   }
 }
 
+/* Status indicators */
 #batchStatus,
 #libraryStats {
   color: #aaa;
   font-size: 14px;
+}
+#statusRow {
+  display: grid;
+  grid-template-columns: 200px 1fr 500px 250px;
+  margin-bottom: 10px;
+}
+
+#statusTitle1 {
+  grid-column: 1;
+}
+
+#statusTitle2 {
+  grid-column: 3;
+}
+
+#statusTitle1,
+#statusTitle2 {
+  font-weight: bold;
+  font-size: 1.5em;
+}
+
+#batchStatus {
+  grid-column: 2;
+}
+
+#libraryStats {
+  grid-column: 4;
 }
 
 /* Tabs */
