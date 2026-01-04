@@ -2,7 +2,7 @@
 set -e
 
 MOVIES="/mnt/media/Movies"
-DATA="/mnt/media/whisperx"
+DATA="/mnt/data/syncorbit"
 SYNCORBIT_CSV="$DATA/syncorbit_library_export.csv"
 LOG="./whisperx_batch.log"
 IGNORE_FILE="$DATA/ignore_list.json"
@@ -33,13 +33,9 @@ if [[ -f "$SYNCORBIT_CSV" ]]; then
         # Extract movie title (handles quotes + commas)
         if [[ "$line" =~ ^\"([^\"]+)\"\,(.+) ]]; then
             movie="${BASH_REMATCH[1]}"
-            rest="${BASH_REMATCH[2]}"
         else
             movie="${line%%,*}"
-            rest="${line#*,}"
         fi
-
-        decision="${rest##*,}"
 
         # Normalize
         # Trim whitespace safely (no xargs, no eval)
@@ -52,11 +48,12 @@ if [[ -f "$SYNCORBIT_CSV" ]]; then
         }
 
         movie_clean=$(trim "$(echo "$movie" | tr -d '\r')")
+        decision_clean="unknown"
 
-        decision_clean=$(trim "$(echo "$decision" | tr -d '\r"')")
-
-        # Normalize case
-        decision_clean=$(echo "$decision_clean" | tr '[:upper:]' '[:lower:]')
+        # Skip already synced movies
+        if echo "$line" | grep -q ',synced,'; then
+          decision_clean="synced"
+        fi
 
         DECISION["$movie_clean"]="$decision_clean"
     done < "$SYNCORBIT_CSV"
@@ -90,7 +87,6 @@ is_ignored() {
 ##############################################
 fuzzy_decision() {
     local folder="$1"
-
     for key in "${!DECISION[@]}"; do
         if [[ "$folder" == "$key" ]] || [[ "$folder" == *"$key"* ]]; then
             echo "${DECISION[$key]}"
@@ -157,7 +153,7 @@ map_lang() {
         lav|lv) echo "lv" ;;
         lit|lt) echo "lt" ;;
         jpn|ja) echo "ja" ;;
-        zho|chi|zh) echo "zh" ;;
+        zho|chi|zh) echo "en" ;;
         ara|ar) echo "ar" ;;
         pol|pl) echo "pl" ;;
         cze|ces|cz|cs) echo "cs" ;;

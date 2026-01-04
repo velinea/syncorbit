@@ -174,7 +174,7 @@ async function pollBatchProgress() {
   if (p.running) {
     document.getElementById(
       'batchStatus'
-    ).textContent = `Scanning ${p.index}/${p.total}: ${p.current_movie}`;
+    ).textContent = `Scanning folders ${p.index}/${p.total}: ${p.current_movie}`;
   }
 }
 
@@ -657,7 +657,7 @@ async function loadLibraryStats() {
     const s = json.stats;
 
     document.getElementById('libraryStats').textContent =
-      `${s.total} movies · ` +
+      `${s.total} analyzed · ` +
       `${s.decisions.synced} synced · ` +
       `${s.decisions.needs_adjustment} poor · ` +
       `${s.decisions.whisper_required} bad · ` +
