@@ -96,7 +96,9 @@ h1 {
 #libraryStats {
   color: #aaa;
   font-size: 14px;
+  padding-top: 6px;
 }
+
 #statusRow {
   display: grid;
   grid-template-columns: 200px 1fr 500px 250px;
@@ -108,7 +110,7 @@ h1 {
 }
 
 #statusTitle2 {
-  grid-column: 3;
+  grid-column: 4;
 }
 
 #statusTitle1,
@@ -122,7 +124,7 @@ h1 {
 }
 
 #libraryStats {
-  grid-column: 4;
+  grid-column: 3;
 }
 
 /* Tabs */
