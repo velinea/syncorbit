@@ -765,7 +765,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   }[action.value];
 
   // --------------------------------------------------
-  // 🔥 SPECIAL CASE: WHISPER = FIRE AND FORGET
+  // 🔥 WHISPER: FIRE-AND-FORGET
   // --------------------------------------------------
   if (action.value === 'touch_whisper') {
     fetch(endpoint, {
@@ -786,16 +786,14 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     );
 
     document.getElementById('bulkModal').style.display = 'none';
-
-    // Uncheck selections
     document.querySelectorAll('.row-check:checked').forEach(cb => (cb.checked = false));
     updateSelectionState();
 
-    return;
+    return; // ✅ HARD EXIT
   }
 
   // --------------------------------------------------
-  // NORMAL (blocking) BULK ACTIONS
+  // ⏳ BLOCKING ACTIONS (ffsubsync, ignore)
   // --------------------------------------------------
   try {
     const res = await fetch(endpoint, {
@@ -813,12 +811,16 @@ document.getElementById('bulkRunBtn').onclick = async () => {
       alert('Done:\n' + JSON.stringify(result, null, 2));
       document.getElementById('bulkModal').style.display = 'none';
     }
+  } catch (err) {
+    console.error(err);
+    alert('Bulk action failed: ' + err.message);
   } finally {
     hideSpinner();
     enableBulkUI();
-
     document.querySelectorAll('.row-check:checked').forEach(cb => (cb.checked = false));
     updateSelectionState();
+    loadLibrary();
+    loadLibraryStats();
   }
 };
 
