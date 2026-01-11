@@ -101,7 +101,7 @@ h1 {
 
 #statusRow {
   display: grid;
-  grid-template-columns: 200px 1fr 500px 250px;
+  grid-template-columns: 200px 1fr 430px 220px;
   margin-bottom: 10px;
 }
 

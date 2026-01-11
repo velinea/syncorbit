@@ -13,7 +13,7 @@ const app = express();
 const PY = '/app/.venv/bin/python3';
 const MEDIA_ROOT = '/app/media';
 const DATA_ROOT = '/app/data';
-const WHISPER_ROOT = path.join(DATA_ROOT, 'ref');
+const WHISPERX_URL = process.env.WHISPERX_URL || 'http://whisperx:8000';
 const IGNORE_FILE = path.join(
   process.env.SYNCORBIT_DATA || '/app/data',
   'ignore_list.json'
@@ -872,6 +872,107 @@ app.get('/api/db/stats', (req, res) => {
   } catch (err) {
     console.error('/api/db/stats failed:', err);
     res.json({ ok: false, error: err.toString() });
+  }
+});
+
+async function submitWhisperJob({ videoPath, outputPath }) {
+  const res = await fetch(`${WHISPERX_URL}/transcribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      video_path: videoPath,
+      output_path: outputPath,
+      language: null,
+    }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`WhisperX submit failed: ${txt}`);
+  }
+
+  return res.json(); // { job_id }
+}
+
+async function getWhisperJobStatus(jobId) {
+  const res = await fetch(`${WHISPERX_URL}/status/${jobId}`);
+  if (!res.ok) {
+    throw new Error(`WhisperX status failed`);
+  }
+  return res.json(); // { state, progress, message }
+}
+
+app.post('/api/whisper/:movie', async (req, res) => {
+  const movie = req.params.movie;
+  const movieDir = path.join(MEDIA_ROOT, movie);
+
+  if (!fs.existsSync(movieDir)) {
+    return res.json({ ok: false, error: 'movie_not_found' });
+  }
+
+  // Find video
+  const video = fs.readdirSync(movieDir).find(f => /\.(mkv|mp4|avi|mov)$/i.test(f));
+
+  if (!video) {
+    return res.json({ ok: false, error: 'no_video_found' });
+  }
+
+  const videoPath = path.join(movieDir, video);
+  const refDir = path.join(DATA_ROOT, 'ref', movie);
+  const outputPath = path.join(refDir, 'ref.srt');
+
+  if (fs.existsSync(outputPath)) {
+    return res.json({ ok: false, error: 'ref_already_exists' });
+  }
+
+  try {
+    const { job_id } = await submitWhisperJob({
+      videoPath,
+      outputPath,
+    });
+
+    // Optional: persist job id (simple JSON file)
+    const jobsFile = path.join(DATA_ROOT, 'whisper_jobs.json');
+    let jobs = {};
+    if (fs.existsSync(jobsFile)) {
+      jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
+    }
+    jobs[movie] = { job_id, started: Date.now() };
+    fs.writeFileSync(jobsFile, JSON.stringify(jobs, null, 2));
+
+    res.json({ ok: true, movie, job_id });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/whisper/status/:movie', async (req, res) => {
+  const movie = req.params.movie;
+  const jobsFile = path.join(DATA_ROOT, 'whisper_jobs.json');
+
+  if (!fs.existsSync(jobsFile)) {
+    return res.json({ ok: false, error: 'no_jobs' });
+  }
+
+  const jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
+  const entry = jobs[movie];
+
+  if (!entry) {
+    return res.json({ ok: false, error: 'no_job_for_movie' });
+  }
+
+  try {
+    const status = await getWhisperJobStatus(entry.job_id);
+
+    // Auto-cleanup on completion
+    if (status.state === 'done' || status.state === 'error') {
+      delete jobs[movie];
+      fs.writeFileSync(jobsFile, JSON.stringify(jobs, null, 2));
+    }
+
+    res.json({ ok: true, ...status });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
   }
 });
 
