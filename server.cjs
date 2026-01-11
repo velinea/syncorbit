@@ -160,6 +160,7 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
   const movies = req.body.movies || [];
   const results = [];
   const errors = [];
+  const whisperUp = await whisperAvailable();
 
   for (const movie of movies) {
     try {
@@ -191,13 +192,12 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
 
       const videoPath = path.join(movieDir, video);
 
-      const whisperUrl = process.env.WHISPERX_URL;
-      if (!whisperUrl) {
+      if (!whisperUp) {
         errors.push({ movie, error: 'whisperx_not_configured' });
         continue;
       }
 
-      const resp = await fetch(`${whisperUrl}/transcribe`, {
+      const resp = await fetch(`${WHISPERX_URL}/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
