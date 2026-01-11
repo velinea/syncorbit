@@ -194,6 +194,20 @@ if (searchBox) {
   });
 }
 
+const searchInput = document.getElementById('librarySearch');
+const clearBtn = document.getElementById('clearSearch');
+
+searchInput.addEventListener('input', () => {
+  clearBtn.style.display = searchInput.value ? 'block' : 'none';
+  renderLibraryTable();
+});
+
+clearBtn.addEventListener('click', () => {
+  searchInput.value = '';
+  clearBtn.style.display = 'none';
+  renderLibraryTable();
+});
+
 async function runSearch(q) {
   resultsDiv.innerHTML = 'Searching…';
   try {

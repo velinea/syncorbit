@@ -6,10 +6,10 @@ Creates:
     /app/data/analysis/<movie>/analysis.syncinfo
     /app/data/syncorbit_library_export.csv
 
-Prefers WhisperX reference in:
-    /app/data/ref/<movie>/ref.srt
-
-Falls back to EN/FI subtitle pairs inside /app/media.
+Prefers newest reference in:
+    /app/data/ref/<movie>/ref.srt (whisper)
+    /app/data/resync/<movie>/<movie>.en.synced.srt (ffsubsync)
+    /app/media/<movie>/<movie>.en.srt
 """
 
 import sqlite3
@@ -244,6 +244,24 @@ def main():
     # Always rebuild CSV fresh each run
     if SUMMARY_CSV.exists():
         SUMMARY_CSV.unlink()
+
+    # Detect and remove missing movies
+    media_movies = {p.name for p in MEDIA_ROOT.iterdir() if p.is_dir()}
+
+    con = sqlite3.connect(DB_PATH)
+
+    def get_known_movies(con):
+        rows = con.execute("SELECT movie FROM movies").fetchall()
+        return {r[0] for r in rows}
+
+    missing = known_movies - media_movies
+
+    if missing:
+        print(f"Removing {len(missing)} missing movies")
+
+        for movie in missing:
+            con.execute("DELETE FROM movies WHERE movie = ?", (movie,))
+        con.commit()
 
     # print(f"Scanning library: {MEDIA_ROOT}")
     # Mark batch scan as started
