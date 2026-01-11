@@ -254,9 +254,10 @@ def main():
         rows = con.execute("SELECT movie FROM movies").fetchall()
         return {r[0] for r in rows}
 
+    known_movies = get_known_movies(con)
     missing = known_movies - media_movies
 
-    if missing:
+    if len(media_movies) > 0 and missing:
         print(f"Removing {len(missing)} missing movies")
 
         for movie in missing:
