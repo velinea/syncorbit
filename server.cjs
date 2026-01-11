@@ -13,7 +13,7 @@ const app = express();
 const PY = '/app/.venv/bin/python3';
 const MEDIA_ROOT = '/app/media';
 const DATA_ROOT = '/app/data';
-const WHISPERX_URL = process.env.WHISPERX_URL || 'http://whisperx:8000';
+const WHISPERX_URL = process.env.WHISPERX_URL || 'http://whisperx:8001';
 const IGNORE_FILE = path.join(
   process.env.SYNCORBIT_DATA || '/app/data',
   'ignore_list.json'
@@ -156,28 +156,69 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
   res.json({ ok: true, total: ignoreList.length });
 });
 
-app.post('/api/bulk/touch_whisper', express.json(), (req, res) => {
+app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
   const movies = req.body.movies || [];
   const results = [];
   const errors = [];
+
+  const whisperUp = await whisperAvailable();
 
   for (const movie of movies) {
     try {
       const refPath = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
 
-      if (!fs.existsSync(refPath)) {
-        errors.push({ movie, error: 'Whisper reference missing' });
+      // -----------------------------------
+      // Case 1: Whisper ref exists → touch
+      // -----------------------------------
+      if (fs.existsSync(refPath)) {
+        const now = new Date();
+        fs.utimesSync(refPath, now, now);
+
+        results.push({
+          movie,
+          ok: true,
+          action: 'touched',
+          path: refPath,
+        });
         continue;
       }
 
-      const now = new Date();
-      fs.utimesSync(refPath, now, now); // update atime + mtime
-
-      results.push({ movie, ok: true, updated: refPath });
+      // ------------------------------------------------
+      // Case 2: Missing → try WhisperX if available
+      // ------------------------------------------------
+      if (whisperUp) {
+        try {
+          const submitted = await submitWhisperJobForMovie(movie);
+          if (submitted) {
+            results.push({
+              movie,
+              ok: true,
+              action: 'whisper_requested',
+            });
+          } else {
+            errors.push({
+              movie,
+              error: 'No video file found',
+            });
+          }
+        } catch (e) {
+          errors.push({
+            movie,
+            error: `Whisper request failed: ${e.message}`,
+          });
+        }
+      } else {
+        // Whisper not running → silent skip
+        errors.push({
+          movie,
+          error: 'Whisper reference missing',
+        });
+      }
     } catch (err) {
       errors.push({ movie, error: String(err) });
     }
   }
+
   res.json({ ok: true, results, errors });
 });
 
@@ -875,23 +916,30 @@ app.get('/api/db/stats', (req, res) => {
   }
 });
 
-async function submitWhisperJob({ videoPath, outputPath }) {
-  const res = await fetch(`${WHISPERX_URL}/transcribe`, {
+async function submitWhisperJobForMovie(movie) {
+  const movieDir = path.join(MEDIA_ROOT, movie);
+  if (!fs.existsSync(movieDir)) return false;
+
+  const video = fs.readdirSync(movieDir).find(f => /\.(mkv|mp4|avi|mov)$/i.test(f));
+
+  if (!video) return false;
+
+  const videoPath = path.join(movieDir, video);
+  const outDir = path.join(DATA_ROOT, 'ref', movie);
+  const outPath = path.join(outDir, 'ref.srt');
+
+  fs.mkdirSync(outDir, { recursive: true });
+
+  await fetch(`${WHISPERX_URL}/transcribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       video_path: videoPath,
-      output_path: outputPath,
-      language: null,
+      output_srt: outPath,
     }),
   });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`WhisperX submit failed: ${txt}`);
-  }
-
-  return res.json(); // { job_id }
+  return true;
 }
 
 async function getWhisperJobStatus(jobId) {
@@ -975,5 +1023,14 @@ app.get('/api/whisper/status/:movie', async (req, res) => {
     res.json({ ok: false, error: err.message });
   }
 });
+
+async function whisperAvailable() {
+  try {
+    const r = await fetch(`${WHISPERX_URL}/health`, { timeout: 1000 });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
 
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'));

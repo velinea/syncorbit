@@ -539,12 +539,7 @@ function renderLibraryTable() {
       ${formatDaysAgo(r.fi_mtime)}
       </td>
       <td>${shortTitle(r.movie)}</td>
-      <td>${refBadge}
-      <button class="whisper-btn" data-movie="${r.movie}">
-        Whisper
-      </button>
-      <span class="whisper-status"></span>
-      </td>
+      <td>${refBadge}</td>
       <td>${r.anchor_count}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
