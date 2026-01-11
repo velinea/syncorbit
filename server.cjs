@@ -13,7 +13,7 @@ const app = express();
 const PY = '/app/.venv/bin/python3';
 const MEDIA_ROOT = '/app/media';
 const DATA_ROOT = '/app/data';
-const WHISPERX_URL = process.env.WHISPERX_URL || 'http://whisperx:8001';
+const WHISPERX_URL = process.env.WHISPERX_URL || 'http://whisperx:8000';
 const IGNORE_FILE = path.join(
   process.env.SYNCORBIT_DATA || '/app/data',
   'ignore_list.json'
@@ -161,59 +161,58 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
   const results = [];
   const errors = [];
 
-  const whisperUp = await whisperAvailable();
-
   for (const movie of movies) {
     try {
-      const refPath = path.join(DATA_ROOT, 'ref', movie, 'ref.srt');
+      const movieDir = path.join(MEDIA_ROOT, movie);
+      const refDir = path.join(DATA_ROOT, 'ref', movie);
+      const refPath = path.join(refDir, 'ref.srt');
 
-      // -----------------------------------
-      // Case 1: Whisper ref exists → touch
-      // -----------------------------------
+      fs.mkdirSync(refDir, { recursive: true });
+
+      // --------------------------------------------------
+      // Case 1: Whisper ref exists → just touch it
+      // --------------------------------------------------
       if (fs.existsSync(refPath)) {
         const now = new Date();
         fs.utimesSync(refPath, now, now);
-
-        results.push({
-          movie,
-          ok: true,
-          action: 'touched',
-          path: refPath,
-        });
+        results.push({ movie, ok: true, action: 'touched' });
         continue;
       }
 
-      // ------------------------------------------------
-      // Case 2: Missing → try WhisperX if available
-      // ------------------------------------------------
-      if (whisperUp) {
-        try {
-          const submitted = await submitWhisperJobForMovie(movie);
-          if (submitted) {
-            results.push({
-              movie,
-              ok: true,
-              action: 'whisper_requested',
-            });
-          } else {
-            errors.push({
-              movie,
-              error: 'No video file found',
-            });
-          }
-        } catch (e) {
-          errors.push({
-            movie,
-            error: `Whisper request failed: ${e.message}`,
-          });
-        }
-      } else {
-        // Whisper not running → silent skip
-        errors.push({
-          movie,
-          error: 'Whisper reference missing',
-        });
+      // --------------------------------------------------
+      // Case 2: Whisper ref missing → request WhisperX
+      // --------------------------------------------------
+      const video = fs.readdirSync(movieDir).find(f => /\.(mkv|mp4|avi|mov)$/i.test(f));
+
+      if (!video) {
+        errors.push({ movie, error: 'no_video_found' });
+        continue;
       }
+
+      const videoPath = path.join(movieDir, video);
+
+      const whisperUrl = process.env.WHISPERX_URL;
+      if (!whisperUrl) {
+        errors.push({ movie, error: 'whisperx_not_configured' });
+        continue;
+      }
+
+      const resp = await fetch(`${whisperUrl}/transcribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_path: videoPath,
+          output_path: refPath,
+        }),
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        errors.push({ movie, error: `whisper_failed: ${text}` });
+        continue;
+      }
+
+      results.push({ movie, ok: true, action: 'whisper_requested' });
     } catch (err) {
       errors.push({ movie, error: String(err) });
     }
