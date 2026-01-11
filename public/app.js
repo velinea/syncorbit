@@ -748,21 +748,56 @@ document.getElementById('bulkModalClose').onclick = () => {
 
 document.getElementById('bulkRunBtn').onclick = async () => {
   disableBulkUI();
+  showSpinner();
+
+  const action = document.querySelector("input[name='bulkAction']:checked");
+  if (!action) {
+    hideSpinner();
+    enableBulkUI();
+    alert('Choose an action first');
+    return;
+  }
+
+  const endpoint = {
+    touch_whisper: '/api/bulk/touch_whisper',
+    ignore: '/api/bulk/ignore',
+    ffsubsync: '/api/bulk/ffsubsync',
+  }[action.value];
+
+  // --------------------------------------------------
+  // 🔥 SPECIAL CASE: WHISPER = FIRE AND FORGET
+  // --------------------------------------------------
+  if (action.value === 'touch_whisper') {
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ movies: currentBulkSelection }),
+    }).catch(err => {
+      console.error('Whisper request failed:', err);
+    });
+
+    hideSpinner();
+    enableBulkUI();
+
+    alert(
+      'Whisper requested.\n\n' +
+        'Transcription is running in the background.\n' +
+        'You can continue using SyncOrbit.'
+    );
+
+    document.getElementById('bulkModal').style.display = 'none';
+
+    // Uncheck selections
+    document.querySelectorAll('.row-check:checked').forEach(cb => (cb.checked = false));
+    updateSelectionState();
+
+    return;
+  }
+
+  // --------------------------------------------------
+  // NORMAL (blocking) BULK ACTIONS
+  // --------------------------------------------------
   try {
-    const action = document.querySelector("input[name='bulkAction']:checked");
-    if (!action) {
-      enableBulkUI();
-      alert('Choose an action first');
-      return;
-    }
-    showSpinner();
-
-    const endpoint = {
-      touch_whisper: '/api/bulk/touch_whisper',
-      ignore: '/api/bulk/ignore',
-      ffsubsync: '/api/bulk/ffsubsync',
-    }[action.value];
-
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -770,9 +805,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     });
 
     const result = await res.json();
-    // -------------------------------
-    // Display ffsubsync results
-    // -------------------------------
+
     if (action.value === 'ffsubsync') {
       bulkResultBox.style.display = 'block';
       renderFfsubsyncResults(result.results);
@@ -781,23 +814,12 @@ document.getElementById('bulkRunBtn').onclick = async () => {
       document.getElementById('bulkModal').style.display = 'none';
     }
   } finally {
-    enableBulkUI(); // <--- always re-enable afterward
     hideSpinner();
-    // Uncheck all selections
+    enableBulkUI();
+
     document.querySelectorAll('.row-check:checked').forEach(cb => (cb.checked = false));
-
-    // Reset selection state
     updateSelectionState();
-
-    return; // prevent falling through
   }
-
-  alert('Done:\n' + JSON.stringify(result, null, 2));
-
-  document.getElementById('bulkModal').style.display = 'none';
-  updateSelectionState();
-  loadLibrary(); // refresh table
-  loadLibraryStats();
 };
 
 function renderFfsubsyncResults(results) {

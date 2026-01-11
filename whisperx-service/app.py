@@ -4,6 +4,8 @@ import whisperx
 import uuid
 import os
 import threading
+from pathlib import Path
+import logging
 import time
 
 # -----------------------------
@@ -22,6 +24,9 @@ jobs = {}  # job_id -> status dict
 job_queue = []
 queue_lock = threading.Lock()
 worker_running = False
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("whisperx-service")
 
 # -----------------------------
 # Load model ONCE
@@ -42,7 +47,7 @@ print("WhisperX model loaded")
 class TranscribeRequest(BaseModel):
     video_path: str
     output_path: str
-    language: str | None = None
+    language: str | None = "en"
 
 
 # -----------------------------
@@ -97,32 +102,66 @@ def start_worker_if_needed():
     thread.start()
 
 
+def write_srt(segments, out_path):
+    def fmt(ts):
+        h = int(ts // 3600)
+        m = int((ts % 3600) // 60)
+        s = int(ts % 60)
+        ms = int((ts - int(ts)) * 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        for i, seg in enumerate(segments, 1):
+            f.write(f"{i}\n")
+            f.write(f"{fmt(seg['start'])} --> {fmt(seg['end'])}\n")
+            f.write(seg["text"].strip() + "\n\n")
+
+
 # -----------------------------
 # API
 # -----------------------------
 @app.post("/transcribe")
 def transcribe(req: TranscribeRequest):
-    if not os.path.exists(req.video_path):
-        raise HTTPException(status_code=400, detail="video_path does not exist")
+    start = time.time()
 
-    job_id = uuid.uuid4().hex
+    video = Path(req.video_path)
+    out = Path(req.output_path)
 
-    jobs[job_id] = {
-        "state": "queued",
-        "progress": 0.0,
-        "message": "Queued",
-        "video_path": req.video_path,
-        "output_path": req.output_path,
-        "language": req.language,
-        "created": time.time(),
+    log.info(f"Transcribe request")
+    log.info(f"  video: {video}")
+    log.info(f"  output: {out}")
+    log.info(f"  language: {req.language}")
+
+    if not video.exists():
+        return {"ok": False, "error": "video_not_found"}
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    log.info("Loading WhisperX model…")
+
+    model = whisperx.load_model(
+        "small",
+        device="cpu",
+        compute_type="int8",
+        vad_method=VAD_METHOD,
+        language=req.language,  # 👈 FORCE LANGUAGE
+    )
+
+    log.info("Model loaded, starting transcription…")
+
+    result = model.transcribe(str(video))
+
+    log.info("Transcription finished, writing SRT…")
+
+    write_srt(result["segments"], out)
+
+    log.info(f"Done in {time.time() - start:.1f}s, wrote {out}")
+
+    return {
+        "ok": True,
+        "segments": len(result["segments"]),
+        "elapsed_sec": round(time.time() - start, 1),
     }
-
-    with queue_lock:
-        job_queue.append(job_id)
-
-    start_worker_if_needed()
-
-    return {"job_id": job_id}
 
 
 @app.get("/status/{job_id}")
