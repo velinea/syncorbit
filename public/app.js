@@ -779,12 +779,8 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     hideSpinner();
     enableBulkUI();
 
-    const hasExisting = result.results?.some(r => r.action === 'touched');
-
     alert(
-      hasExisting
-        ? 'Whisper reference already exists.\nTimestamp updated.'
-        : 'Whisper requested.\n\nTranscription is running in the background.\nYou can continue using SyncOrbit.'
+      'Whisper requested.\n\nTranscription is running in the background.\nYou can continue using SyncOrbit.'
     );
 
     document.getElementById('bulkModal').style.display = 'none';

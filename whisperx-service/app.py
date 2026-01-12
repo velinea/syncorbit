@@ -153,20 +153,22 @@ def transcribe(req: TranscribeRequest):
 
         log.info(proc.stdout)
 
-        out_dir = Path(output_path)
-        srt_files = list(out_dir.glob("*.srt"))
+        ref_dir = Path(out.parent)  # this must already exist
+        srt_files = list(ref_dir.glob("*.srt"))
 
         if not srt_files:
             raise RuntimeError("WhisperX produced no SRT output")
 
-        # Take the first (there should be exactly one)
-        generated = srt_files[0]
-        ref_path = out_dir / "ref.srt"
+        # WhisperX names the file after the media (e.g. Movie Name.srt)
+        generated_srt = srt_files[0]
+        final_ref = ref_dir / "ref.srt"
 
-        # Replace existing ref.srt atomically
-        generated.replace(ref_path)
+        # Replace / normalize
+        generated_srt.replace(final_ref)
 
-        log.info("Whisper reference normalized: %s → %s", generated.name, ref_path.name)
+        log.info(
+            "Whisper reference normalized: %s → %s", generated_srt.name, final_ref.name
+        )
         log.info(f"Done in {time.time() - start:.1f}s")
         return {"ok": True}
 
