@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir \
     "av<16" \
     nltk \
     "pandas>=2.2,<2.3" \
-    triton>=3.3.0
+    "triton>=3.3.0"
 
 # WhisperX itself
 RUN pip install --no-cache-dir whisperx==3.7.4

@@ -102,66 +102,77 @@ def start_worker_if_needed():
     thread.start()
 
 
-def write_srt(segments, out_path):
-    def fmt(ts):
-        h = int(ts // 3600)
-        m = int((ts % 3600) // 60)
-        s = int(ts % 60)
-        ms = int((ts - int(ts)) * 1000)
-        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
-    with open(out_path, "w", encoding="utf-8") as f:
-        for i, seg in enumerate(segments, 1):
-            f.write(f"{i}\n")
-            f.write(f"{fmt(seg['start'])} --> {fmt(seg['end'])}\n")
-            f.write(seg["text"].strip() + "\n\n")
-
-
 # -----------------------------
 # API
 # -----------------------------
+import subprocess
+import shlex
+
+
 @app.post("/transcribe")
 def transcribe(req: TranscribeRequest):
-    start = time.time()
+    import traceback
 
-    video = Path(req.video_path)
-    out = Path(req.output_path)
+    try:
+        video = Path(req.video_path)
+        out = Path(req.output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
 
-    log.info(f"Transcribe request")
-    log.info(f"  video: {video}")
-    log.info(f"  output: {out}")
-    log.info(f"  language: {req.language}")
+        cmd = [
+            "whisperx",
+            str(video),
+            "--model",
+            "small",
+            "--device",
+            "cpu",
+            "--compute_type",
+            "int8",
+            "--vad_method",
+            "silero",
+            "--language",
+            "en",
+            "--output_format",
+            "srt",
+            "--output_dir",
+            str(out.parent),
+        ]
 
-    if not video.exists():
-        return {"ok": False, "error": "video_not_found"}
+        log.info("Running WhisperX CLI:")
+        log.info(" ".join(shlex.quote(c) for c in cmd))
 
-    out.parent.mkdir(parents=True, exist_ok=True)
+        start = time.time()
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
 
-    log.info("Loading WhisperX model…")
+        if proc.returncode != 0:
+            log.error(proc.stderr)
+            return {"ok": False, "error": proc.stderr.strip()}
 
-    model = whisperx.load_model(
-        "small",
-        device="cpu",
-        compute_type="int8",
-        vad_method=VAD_METHOD,
-        language=req.language,  # 👈 FORCE LANGUAGE
-    )
+        log.info(proc.stdout)
 
-    log.info("Model loaded, starting transcription…")
+        out_dir = Path(output_path)
+        srt_files = list(out_dir.glob("*.srt"))
 
-    result = model.transcribe(str(video))
+        if not srt_files:
+            raise RuntimeError("WhisperX produced no SRT output")
 
-    log.info("Transcription finished, writing SRT…")
+        # Take the first (there should be exactly one)
+        generated = srt_files[0]
+        ref_path = out_dir / "ref.srt"
 
-    write_srt(result["segments"], out)
+        # Replace existing ref.srt atomically
+        generated.replace(ref_path)
 
-    log.info(f"Done in {time.time() - start:.1f}s, wrote {out}")
+        log.info("Whisper reference normalized: %s → %s", generated.name, ref_path.name)
+        log.info(f"Done in {time.time() - start:.1f}s")
+        return {"ok": True}
 
-    return {
-        "ok": True,
-        "segments": len(result["segments"]),
-        "elapsed_sec": round(time.time() - start, 1),
-    }
+    except Exception:
+        log.error(traceback.format_exc())
+        return {"ok": False, "error": "internal_error"}
 
 
 @app.get("/status/{job_id}")

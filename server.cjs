@@ -176,7 +176,11 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
       if (fs.existsSync(refPath)) {
         const now = new Date();
         fs.utimesSync(refPath, now, now);
-        results.push({ movie, ok: true, action: 'touched' });
+        results.push({
+          movie,
+          ok: true,
+          action: fs.existsSync(refPath) ? 'touched' : 'whisper_requested',
+        });
         continue;
       }
 
