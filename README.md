@@ -1,199 +1,219 @@
 # <img src="public/logo.png" width=100px> SyncOrbit
 
-- SyncOrbit is a subtitle alignment, analysis, and correction tool designed for large movie libraries.
-- It helps you detect subtitle drift, choose the best reference, and automatically or manually re-align subtitles using a combination of traditional methods and AI-based transcription (WhisperX).
-- SyncOrbit is built for power users with curated media libraries (Radarr / Bazarr workflows), and focuses on transparency and control rather than fully automatic “black box” syncing.
+SyncOrbit is a self-hosted tool for analyzing, fixing, and managing subtitle synchronization in large movie libraries.
 
-## ✨ Key Features
+It combines automated alignment, speech-based references, and human-in-the-loop workflows to solve one problem well:
 
-<img src="docs/screenshot1.png">
+“Which subtitle is correct, and how do I make it stay that way?”
 
-### 📚 Library-wide subtitle analysis
+<img src="docs/screenshot2.png" width=800px>
 
-- Anchor detection & drift measurement
-- Per-movie sync status overview
-- SQLite-based summary for fast loading
+## What SyncOrbit Does
 
-### 🧠 Multiple reference strategies
+- Scans a movie library and analyzes subtitle sync quality
+- Aligns subtitles using multiple reference strategies:
+  Original English subtitles
+- WhisperX-generated speech references
+- FFSubSync-aligned references
+- Scores and classifies results (synced / needs adjustment / bad)
+- Lets you reanalyze individual movies or run batch jobs
+- Keeps state in a database (not fragile CSV glue)
+- Designed for large libraries (thousands of movies)
 
-- Original EN subtitles
-- ffsubsync-generated references
-- WhisperX-generated references
-- Automatic selection of the most recent / best reference
+## Design Philosophy
 
-### 📈 Visual drift analysis
+SyncOrbit follows a few strict principles:
 
-- Anchor graphs with offset visualization
-- Smooth toggles between raw and cleaned anchors
+- Automation first, but not blindly
+- Never delete expensive work (e.g. Whisper references)
+- Newest reference wins (simple, intuitive decision model)
+- UI should explain decisions, not hide them
+- Everything must be inspectable and reversible
 
-### 🛠️ Bulk operations
+It is intentionally not a media manager like Radarr or Bazarr —
+SyncOrbit assumes those already exist.
 
-- Run ffsubsync on many movies
-- Touch / manage references
-- Ignore problematic titles
-- Progress tracking for long-running jobs
-
-### 🎯 Manual & per-movie re-analysis
-
-- One-click re-analyze for individual movies
-- Row-level feedback with live UI updates
-
-### 🐳 Docker-based architecture
-
-- Node.js backend
-- Python alignment engine
-- library is backed by SQLite
-- Clean separation of media, analysis, and generated data
-
-### 🏗️ Architecture Overview
+🏗 Architecture Overview
 
 ```
-┌────────────────────────┐
-│        Browser UI      │
-│  (library, graphs, UI) │
-└───────────▲────────────┘
-            │ HTTP API
-┌───────────┴────────────┐
-│      Node.js API       │
-│   server.cjs           │
-│   bulk actions         │
-│   progress tracking    │
-└───────────▲────────────┘
-            │ spawn
-┌───────────┴────────────┐
-│     Python Aligner     │
-│  align.py              │
-│  batch_scan.py         │
-│  drift analysis        │
-└───────────▲────────────┘
-            │
-┌───────────┴────────────┐
-│    WhisperX (optional) │
-│ external / remote host │
-└────────────────────────┘
+┌────────────┐
+│   Browser  │
+│   (UI)     │
+└─────┬──────┘
+      │ REST
+┌─────▼──────┐
+│  SyncOrbit │
+│  Node.js   │
+│  API + UI  │
+└─────┬──────┘
+      │
+      ├─ SQLite DB  (library state, decisions, timestamps)
+      ├─ Python tools
+      │    ├─ batch_scan.py
+      │    ├─ align.py
+      │    └─ ffsubsync
+      │
+      └─ (optional)
+           WhisperX service (separate container)
 ```
 
-📁 Data Layout
+#### Key idea
+
+- SyncOrbit orchestrates
+- Python does the heavy lifting
+- WhisperX is isolated and optional
+
+## Components
+
+1. SyncOrbit (main container)
+
+- Node.js backend (API)
+- HTML / JS frontend
+- SQLite database
+- Coordinates batch jobs and single-movie actions
+
+2. Python tools
+
+- batch_scan.py – full library analysis
+- align.py – subtitle alignment + statistics
+- ffsubsync – reference creation from audio
+
+3. WhisperX service (optional)
+
+- Separate container
+- Exposes a simple HTTP API
+- Generates ref.srt when requested
+- Runs asynchronously (does not block UI)
+
+If WhisperX is not running, SyncOrbit continues to work normally.
+
+## Folder Structure (important)
 
 ```
-/app/media            # Read-only movie library
+/media
+  /Movie Name (Year)
+    Movie.mkv
+    Movie.en.srt
+    Movie.fi.srt
+    folder.jpg
+
 /app/data
-  ├── analysis/        # Per-movie analysis.syncinfo
-  ├── ref/             # Whisper references
-  ├── resync/          # ffsubsync outputs
-  ├── ignore_list.json
-  └── syncorbit_library_export.csv
+  /analysis
+    /Movie Name (Year)
+      analysis.syncinfo
+  /ref
+    /Movie Name (Year)
+      ref.srt
+  /resync
+    /Movie Name (Year)
+      *.synced.srt
+  ignore_list.json
+  syncorbit.db
 ```
 
-### 🚀 Getting Started
+## Decisions & References
 
-⚠️ SyncOrbit is currently power-user / self-host software.
-Expect to read logs and tweak configs.
+Each movie ends up with:
 
-**Requirements**
+- decision
 
-- Docker / Docker Compose
-- Media library mounted read-only
-- Python dependencies installed inside container
-- (Optional) WhisperX on a separate machine
+  - synced
+  - needs_adjustment
+  - bad
 
-**Basic Setup**
+- best_reference
+
+  - en
+  - whisper
+  - ffsubsync
+
+- reference_path
+- alignment statistics (anchors, drift, offsets)
+
+#### Rule:
+
+The newest valid reference wins — unless manually overridden.
+
+## UI Highlights
+
+- Fast library table (DB-backed)
+- Hover poster previews (folder.jpg)
+- Reference badges (EN / Whisper / FFSync)
+- Inline reanalyze buttons with live feedback
+- Bulk actions:
+  - Ignore movies
+  - Run FFSubSync
+  - Touch / create Whisper references
+- Analysis graphs and statistics per movie
+
+## Batch Workflow
+
+Typical nightly flow:
+
+1. batch_scan.py (cron)
+2. Remove missing movies from DB
+3. Analyze new or changed subtitles
+4. Update decisions & stats
+5. UI reflects changes instantly
+
+## Getting Started (high level)
 
 ```
-git clone https://github.com/yourname/syncorbit.git
+clone repo
+git clone https://github.com/yourname/syncorbit
 cd syncorbit
+
+# build container
 docker build -t syncorbit .
-docker run -p 5010:5010 \
-  -v /path/to/movies:/app/media:ro \
-  -v /path/to/data:/app/data \
+
+# run
+docker run \
+  -v /media:/media \
+  -v /app/data:/app/data \
+  -p 5010:5010 \
   syncorbit
 ```
 
-**Then open:**
+(Exact setup depends on your environment — Unraid supported.)
 
-http://localhost:5010
+## Optional: WhisperX Integration
 
-### 🧪 Workflow Philosophy
+- Run WhisperX as a separate container
+- Same Docker network as SyncOrbit
+- SyncOrbit calls it only when needed
+- Long jobs run in the background
 
-SyncOrbit is not fully automatic by design.
+This avoids:
 
-#### Instead:
+- UI blocking
+- Dependency hell
+- GPU coupling
 
-- Analyze entire library
-- Let SyncOrbit choose the best available reference
-- Inspect problematic titles visually
-- Apply targeted bulk fixes (ffsubsync, Whisper)
-- Re-analyze individual movies as needed
-- This approach scales to thousands of movies while keeping you in control.
+## What SyncOrbit Is Not
 
-### 🧭 Current Status
+- Not a subtitle downloader
+- Not a media manager
+- Not real-time
+- Not cloud-based
 
-- ✅ Core alignment engine stable
-- ✅ Bulk operations functional
-- ✅ UI usable for daily workflows
-- ⚠️ WhisperX integration assumes external setup
-- ⚠️ No formal config UI yet
+It is a library maintenance tool.
 
-### 🛣️ Roadmap (Short Term)
+## Project Status
 
-- Better reference scoring & weighting
-- Improved anchor visualization
-- Configurable thresholds
-- Documentation & examples
-- Optional read-only demo mode
+- Actively used
+- Architecture stabilized
+- UX still evolving
+- Not yet “one-click install”
 
-### 📜 License
+Expect iteration.
+
+## License
 
 [MIT](https://github.com/velinea/syncorbit/blob/main/LICENSE.md)
 
-### 🙏 Acknowledgements
+## Credits & Inspiration
 
-- ffsubsync
-- WhisperX
-- fastembed
-- apidFuzz
-- Radarr / Bazarr ecosystems
-
-## ✍️ Why SyncOrbit Exists
-
-Subtitle syncing looks like a solved problem — until you try to manage it at scale.
-
-If you have a handful of movies, tools like ffsubsync or manual shifting are often enough.
-But once your library grows into the hundreds or thousands, subtle problems start to surface:
-
-- Subtitles that mostly work, but slowly drift out of sync
-- Different releases using slightly different cuts or frame rates
-- “Synced” subtitles that are technically aligned but unpleasant to watch
-- Automatic tools that fail silently or overwrite good data
-- No clear way to understand why a subtitle is bad, only that it feels wrong
-
-At that point, syncing stops being a one-off task and becomes a library-wide quality problem.
-
-Most existing tools focus on fixing subtitles.
-Very few focus on understanding them.
-
-SyncOrbit was created to fill that gap.
-
-Instead of treating subtitle syncing as a black box, SyncOrbit makes it:
-
-- Observable — you can see anchor density, drift, offsets, and trends
-- Comparable — EN vs Whisper vs ffsubsync references are visible and traceable
-- Reversible — nothing is blindly overwritten; decisions are explicit
-- Scalable — designed for large, curated libraries, not single files
-
-SyncOrbit doesn’t aim for “perfect automation”.
-It aims for informed decisions.
-
-It helps you answer questions like:
-
-- Is this subtitle actually good, or just “good enough”?
-- Which reference worked best for this movie — and why?
-- Is this a one-off problem, or a systematic issue across releases?
-- What should I fix next, and what can I safely ignore?
-
-In short:
-
-SyncOrbit exists to give you control back over subtitle quality — without forcing you to micromanage every movie.
-
-If you care about subtitles enough to notice when they’re almost right,
-SyncOrbit is built for you.
+- FFSubSync
+- Whisper / WhisperX
+- Radarr / Bazarr philosophy
+- Plex UX patterns

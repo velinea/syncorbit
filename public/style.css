@@ -459,6 +459,13 @@ button:disabled {
   background: #020617;
 }
 
+thead th {
+  position: sticky;
+  top: 0;
+  background: #111;
+  z-index: 10;
+}
+
 #status-synced,
 #status-adjust,
 #status-bad {
