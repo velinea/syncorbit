@@ -88,12 +88,14 @@ def upsert_movie_row(row: dict):
             movie, anchor_count, avg_offset, drift_span, decision,
             best_reference, reference_path,
             has_whisper, has_ffsubsync,
-            fi_mtime, last_analyzed, ignored
+            fi_mtime, last_analyzed, ignored,
+            state
           ) VALUES (
             :movie, :anchor_count, :avg_offset, :drift_span, :decision,
             :best_reference, :reference_path,
             :has_whisper, :has_ffsubsync,
-            :fi_mtime, :last_analyzed, :ignored
+            :fi_mtime, :last_analyzed, :ignored,
+            :state
           )
           ON CONFLICT(movie) DO UPDATE SET
             anchor_count=excluded.anchor_count,
@@ -106,7 +108,8 @@ def upsert_movie_row(row: dict):
             has_ffsubsync=excluded.has_ffsubsync,
             fi_mtime=excluded.fi_mtime,
             last_analyzed=excluded.last_analyzed,
-            ignored=excluded.ignored
+            ignored=excluded.ignored,
+            state=excluded.state
         """,
             row,
         )
@@ -121,6 +124,25 @@ def ensure_column(con, table, column, ddl):
     if column not in cols:
         con.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
         con.commit()
+
+
+def normalize_movie_row(row: dict) -> dict:
+    defaults = {
+        "anchor_count": None,
+        "avg_offset": None,
+        "drift_span": None,
+        "decision": None,
+        "best_reference": None,
+        "reference_path": None,
+        "has_whisper": 0,
+        "has_ffsubsync": 0,
+        "fi_mtime": None,
+        "last_analyzed": None,
+        "ignored": 0,
+        "state": "ok",
+    }
+
+    return {**defaults, **row}
 
 
 def load_ignore_list():
@@ -291,13 +313,14 @@ def main():
         if movie in ignored:
             print(f"→ Skipping (ignored): {movie}")
 
-            upsert_movie_row(
+            row = normalize_movie_row(
                 {
                     "movie": movie,
                     "state": "ignored",
                     "ignored": True,
                 }
             )
+            upsert_movie_row(row)
             continue
 
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
@@ -315,6 +338,7 @@ def main():
                 "drift_span": None,
                 "ignored": False,
             }
+            row = normalize_movie_row(row)
             upsert_movie_row(row)
             continue
 
@@ -394,6 +418,7 @@ def main():
                 "ignored": 1 if movie in ignored else 0,
             }
             write_summary_row(row, SUMMARY_CSV)
+            row = normalize_movie_row(row)
             upsert_movie_row(row)
 
             continue
