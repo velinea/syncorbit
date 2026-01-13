@@ -578,9 +578,8 @@ function renderLibraryTable() {
 
     // Poster preview on hover
     tr.addEventListener('mouseenter', () => {
-      posterPreview.style.backgroundImage = `url(/api/poster/${encodeURIComponent(
-        r.movie
-      )})`;
+      const url = `/api/poster/${encodeURIComponent(r.movie)}`;
+      posterPreview.style.backgroundImage = `url("${url}")`;
       posterPreview.classList.add('show');
     });
 
