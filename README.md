@@ -67,23 +67,22 @@ SyncOrbit assumes those already exist.
 
 1. SyncOrbit (main container)
 
-- Node.js backend (API)
-- HTML / JS frontend
-- SQLite database
-- Coordinates batch jobs and single-movie actions
+   - Node.js backend (API)
+   - HTML / JS frontend
+   - SQLite database
+   - Coordinates batch jobs and single-movie actions
 
 2. Python tools
 
-- batch_scan.py – full library analysis
-- align.py – subtitle alignment + statistics
-- ffsubsync – reference creation from audio
+   - batch_scan.py – full library analysis
+   - align.py – subtitle alignment + statistics
+   - ffsubsync – reference creation from audio
 
 3. WhisperX service (optional)
-
-- Separate container
-- Exposes a simple HTTP API
-- Generates ref.srt when requested
-- Runs asynchronously (does not block UI)
+   - Separate container
+   - Exposes a simple HTTP API
+   - Generates ref.srt when requested
+   - Runs asynchronously (does not block UI)
 
 If WhisperX is not running, SyncOrbit continues to work normally.
 
@@ -155,6 +154,141 @@ Typical nightly flow:
 3. Analyze new or changed subtitles
 4. Update decisions & stats
 5. UI reflects changes instantly
+
+## How I Actually Use SyncOrbit
+
+SyncOrbit is not something I run once and forget.
+
+**I use it as a long-term maintenance tool for a curated movie library.**
+
+Here is my real, day-to-day workflow.
+
+1. Nightly batch scan (fully automatic)
+
+   I run batch_scan.py on a schedule (cron).
+
+   This does the heavy lifting:
+
+   - scans the whole library
+   - analyzes subtitle alignment
+   - updates the database
+   - removes movies that no longer exist on disk
+   - skips ignored movies
+
+   I don’t watch the output.
+   I just let it run.
+
+   SyncOrbit is designed so that nothing breaks if this takes hours.
+
+2. Open SyncOrbit and sort by “recent”
+
+   When I open the UI, I sort the library by Finnish subtitle modification time.
+
+   This immediately shows:
+
+   - new movies
+   - replaced releases
+   - subtitles that were recently touched
+
+   I almost never scroll the full list — I focus on what changed.
+
+3. Look at decisions, not files
+
+   I don’t inspect subtitle files directly.
+
+   Instead, I look at:
+
+   - decision (synced, needs_adjustment, bad)
+   - anchor count
+   - drift span
+   - reference badge (EN / Whisper / FFSubSync)
+
+   This tells me where attention is needed without guessing.
+
+   Most movies are fine.
+   I don’t touch them.
+
+4. Whisper only when needed
+
+   Whisper references are expensive (slow, heavy).
+
+   So my rule is simple:
+
+   - If EN subtitles sync well → do nothing
+   - If EN fails badly → create Whisper reference
+   - Never delete Whisper references once created
+
+   I use the bulk “Touch Whisper” action to:
+
+   - reuse existing Whisper references
+   - or request new ones in the background
+
+   While Whisper runs, I continue using SyncOrbit normally.
+
+5. FFSubSync as a repair tool, not default
+
+   FFSubSync is powerful but imperfect.
+
+   I use it when:
+
+   - Whisper alignment still struggles
+   - timing drift looks systematic
+   - I need a better EN-based reference
+
+   FFSubSync results are explicit references, not magic fixes.
+
+   They live alongside other references and can be compared later.
+
+6. Reanalyze single movies when something looks off
+
+   If a movie stands out:
+
+   - I click Reanalyze
+   - SyncOrbit automatically picks the newest reference
+   - Analysis updates without rerunning the whole library
+
+   This is fast enough to use interactively.
+
+7. Ignore movies intentionally
+
+   Sometimes a movie is:
+
+   - missing subtitles
+   - waiting for a better release
+   - intentionally excluded
+
+   I mark it as ignored.
+
+   Ignored movies:
+
+   - stay in the database
+   - are visible but dimmed
+   - are excluded from analysis until re-enabled
+
+   This avoids repeated “false problems”.
+
+8. Trust the system, but verify visually
+
+   If numbers look suspicious:
+
+   - I open the analysis view
+   - inspect offset graphs
+   - confirm that subtitles feel right in playback
+
+   SyncOrbit helps me decide where to look, not replace judgment.
+
+### The Core Insight
+
+Most subtitle problems don’t need fixing —
+they need identification.
+
+SyncOrbit exists to answer:
+
+- Which subtitles are good enough?
+- Which ones are worth the time?
+- What changed since last time?
+
+Once those questions are answered, the rest is easy.
 
 ## Getting Started (high level)
 

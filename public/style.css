@@ -466,6 +466,10 @@ thead th {
   z-index: 10;
 }
 
+#libraryTable tbody tr.dimmed {
+  opacity: 0.5;
+}
+
 #status-synced,
 #status-adjust,
 #status-bad {

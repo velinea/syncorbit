@@ -26,7 +26,9 @@ function initDb() {
 
       fi_mtime INTEGER,
       last_analyzed INTEGER,
-      ignored INTEGER DEFAULT 0
+      ignored INTEGER DEFAULT 0,
+
+      state TEXT DEFAULT 'ok'
     );
 
     CREATE INDEX IF NOT EXISTS idx_movies_fi_mtime ON movies(fi_mtime);

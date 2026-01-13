@@ -113,6 +113,13 @@ def upsert_movie_row(row: dict):
         con.close()
 
 
+def ensure_column(con, table, column, ddl):
+    cols = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+    if column not in cols:
+        con.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+        con.commit()
+
+
 def load_ignore_list():
     if IGNORE_FILE.exists():
         try:
@@ -250,6 +257,8 @@ def main():
 
     con = sqlite3.connect(DB_PATH)
 
+    ensure_column(con, "movies", "state", "state TEXT DEFAULT 'ok'")
+
     def get_known_movies(con):
         rows = con.execute("SELECT movie FROM movies").fetchall()
         return {r[0] for r in rows}
@@ -279,22 +288,13 @@ def main():
         if movie in ignored:
             print(f"→ Skipping (ignored): {movie}")
 
-            row = {
-                "movie": movie,
-                "anchor_count": None,
-                "avg_offset": None,
-                "drift_span": None,
-                "decision": "unprocessed",
-                "best_reference": None,
-                "reference_path": None,
-                "has_whisper": int(whisper_ref_path.exists()),
-                "has_ffsubsync": 0,
-                "fi_mtime": fi_mtime,
-                "last_analyzed": None,
-                "ignored": 1,
-            }
-
-            upsert_movie_row(row)
+            upsert_movie_row(
+                {
+                    "movie": movie,
+                    "state": "ignored",
+                    "ignored": True,
+                }
+            )
             continue
 
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
@@ -303,7 +303,16 @@ def main():
         ref_candidates = collect_reference_candidates(folder, movie)
 
         if not ref_candidates:
-            # print(f"[SKIP] No reference candidates for {movie}")
+            row = {
+                "movie": movie,
+                "state": "missing_subtitles",
+                "decision": None,
+                "anchor_count": None,
+                "avg_offset": None,
+                "drift_span": None,
+                "ignored": False,
+            }
+            upsert_movie_row(row)
             continue
 
         resync_dir = RESYNC_ROOT / movie

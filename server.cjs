@@ -666,6 +666,7 @@ app.get('/api/library', (req, res) => {
         `
         SELECT
           movie,
+          state,
           anchor_count,
           avg_offset,
           drift_span,

@@ -102,7 +102,7 @@ function clearLibraryGraph() {
 }
 
 function safe(v) {
-  if (typeof v !== 'number' || isNaN(v)) return '–';
+  if (typeof v !== 'number' || isNaN(v) || r.state !== 'ok') return '–';
 
   const abs = Math.abs(v);
 
@@ -529,6 +529,9 @@ function renderLibraryTable() {
 
   limited.forEach(r => {
     const tr = document.createElement('tr');
+    const dimmed = r.state !== 'ok';
+    tr.classList.toggle('dimmed', dimmed);
+
     let refBadge = '';
 
     if (r.best_reference === 'whisper') {
@@ -557,8 +560,8 @@ function renderLibraryTable() {
       <td>${r.anchor_count}</td>
       <td>${safe(r.avg_offset)}</td>
       <td>${safe(r.drift_span)}</td>
-      <td>${shortStatus(r.decision)}
-      <span class="reanalyze-status" data-movie="${r.movie}"></span>
+      <td>${r.state !== 'ok' ? r.state.replace('_', ' ') : shortStatus(r.decision)}
+        <span class="reanalyze-status" data-movie="${r.movie}"></span>
       </td>
       <td><button class="reanalyze-btn" data-movie="${
         r.movie
