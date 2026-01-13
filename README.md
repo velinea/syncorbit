@@ -12,9 +12,9 @@ It combines automated alignment, speech-based references, and human-in-the-loop 
 
 - Scans a movie library and analyzes subtitle sync quality
 - Aligns subtitles using multiple reference strategies:
-  Original English subtitles
-- WhisperX-generated speech references
-- FFSubSync-aligned references
+  - Original English subtitles
+  - WhisperX-generated speech references
+  - FFSubSync-aligned references
 - Scores and classifies results (synced / needs adjustment / bad)
 - Lets you reanalyze individual movies or run batch jobs
 - Keeps state in a database (not fragile CSV glue)
@@ -160,7 +160,7 @@ Typical nightly flow:
 
 ```
 clone repo
-git clone https://github.com/yourname/syncorbit
+git clone https://github.com/velinea/syncorbit
 cd syncorbit
 
 # build container
