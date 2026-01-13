@@ -59,6 +59,8 @@ CSV_FIELDS = [
 
 def upsert_movie_row(row: dict):
     con = sqlite3.connect(DB_PATH)
+    ensure_column(con, "movies", "state", "state TEXT DEFAULT 'ok'")
+
     try:
         con.execute(
             """
@@ -74,7 +76,8 @@ def upsert_movie_row(row: dict):
             has_ffsubsync INTEGER DEFAULT 0,
             fi_mtime INTEGER,
             last_analyzed INTEGER,
-            ignored INTEGER DEFAULT 0
+            ignored INTEGER DEFAULT 0,
+            state TEXT DEFAULT 'ok'
           )
         """
         )

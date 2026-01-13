@@ -102,7 +102,7 @@ function clearLibraryGraph() {
 }
 
 function safe(v) {
-  if (typeof v !== 'number' || isNaN(v) || r.state !== 'ok') return '–';
+  if (typeof v !== 'number' || isNaN(v)) return '–';
 
   const abs = Math.abs(v);
 
@@ -557,9 +557,9 @@ function renderLibraryTable() {
       </td>
       <td>${shortTitle(r.movie)}</td>
       <td>${refBadge}</td>
-      <td>${r.anchor_count}</td>
-      <td>${safe(r.avg_offset)}</td>
-      <td>${safe(r.drift_span)}</td>
+      <td>${r.state !== 'ok' ? '-' : r.anchor_count}</td>
+      <td>${r.state !== 'ok' ? '-' : safe(r.avg_offset)}</td>
+      <td>${r.state !== 'ok' ? '-' : safe(r.drift_span)}</td>
       <td>${r.state !== 'ok' ? r.state.replace('_', ' ') : shortStatus(r.decision)}
         <span class="reanalyze-status" data-movie="${r.movie}"></span>
       </td>

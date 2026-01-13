@@ -6,6 +6,21 @@ const DB_PATH = path.join(DATA_ROOT, 'syncorbit.db');
 
 const db = new Database(DB_PATH);
 
+function ensureColumn(table, column) {
+  const cols = db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .map(r => r.name);
+
+  if (!cols.includes(column)) {
+    db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT DEFAULT 'ok'`).run();
+    console.log(`[DB] added column ${table}.${column}`);
+  }
+}
+
+// RUN MIGRATIONS HERE
+ensureColumn('movies', 'state');
+
 function initDb() {
   db.exec(`
     PRAGMA journal_mode=WAL;
