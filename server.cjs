@@ -1036,4 +1036,13 @@ async function whisperAvailable() {
   }
 }
 
+app.get('/api/poster/:movie', (req, res) => {
+  const poster = path.join(MEDIA_ROOT, req.params.movie, 'folder.jpg');
+  if (fs.existsSync(poster)) {
+    res.sendFile(poster);
+  } else {
+    res.status(404).end();
+  }
+});
+
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'));

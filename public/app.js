@@ -576,6 +576,18 @@ function renderLibraryTable() {
       openLibraryAnalysis(r);
     });
 
+    // Poster preview on hover
+    tr.addEventListener('mouseenter', () => {
+      posterPreview.style.backgroundImage = `url(/api/poster/${encodeURIComponent(
+        r.movie
+      )})`;
+      posterPreview.classList.add('show');
+    });
+
+    tr.addEventListener('mouseleave', () => {
+      posterPreview.classList.remove('show');
+    });
+
     libraryTableBody.appendChild(tr);
   });
 }

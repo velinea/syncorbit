@@ -264,6 +264,26 @@ button:disabled {
   }
 }
 
+.poster-preview {
+  position: fixed;
+  right: 24px;
+  top: 80px;
+  width: 240px;
+  aspect-ratio: 2 / 3;
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  z-index: 3000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.poster-preview.show {
+  opacity: 1;
+}
+
 /* Manual align */
 
 #summary {
