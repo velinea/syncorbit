@@ -278,7 +278,11 @@ def main():
         SUMMARY_CSV.unlink()
 
     # Detect and remove missing movies
-    media_movies = {p.name for p in MEDIA_ROOT.iterdir() if p.is_dir()}
+    media_movies = {
+        p.name
+        for p in MEDIA_ROOT.iterdir()
+        if p.is_dir() and not p.name.startswith(".")
+    }
 
     con = sqlite3.connect(DB_PATH)
 
@@ -315,17 +319,21 @@ def main():
 
         movie = folder.name
         if movie in ignored:
-            print(f"→ Skipping (ignored): {movie}")
+            print(f"→ Marking ignored: {movie}")
 
             row = normalize_movie_row(
                 {
                     "movie": movie,
                     "state": "ignored",
                     "ignored": True,
+                    "decision": None,
+                    "anchor_count": None,
+                    "avg_offset": None,
+                    "drift_span": None,
                 }
             )
             upsert_movie_row(row)
-            continue
+            continue  #
 
         syncinfo_path = ANALYSIS_ROOT / movie / "analysis.syncinfo"
 
