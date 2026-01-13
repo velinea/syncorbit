@@ -556,11 +556,11 @@ function renderLibraryTable() {
       ${formatDaysAgo(r.fi_mtime)}
       </td>
       <td>${shortTitle(r.movie)}</td>
-      <td>${refBadge}</td>
+      <td>${renderStateBadge(r)} ${refBadge}</td>
       <td>${r.state !== 'ok' ? '-' : r.anchor_count}</td>
       <td>${r.state !== 'ok' ? '-' : safe(r.avg_offset)}</td>
       <td>${r.state !== 'ok' ? '-' : safe(r.drift_span)}</td>
-      <td>${r.state !== 'ok' ? r.state.replace('_', ' ') : shortStatus(r.decision)}
+      <td>${r.state !== 'ok' ? '-' : shortStatus(r.decision)}
         <span class="reanalyze-status" data-movie="${r.movie}"></span>
       </td>
       <td><button class="reanalyze-btn" data-movie="${
@@ -592,6 +592,30 @@ function renderLibraryTable() {
 
     libraryTableBody.appendChild(tr);
   });
+}
+
+function renderStateBadge(r) {
+  if (!r.state || r.state === 'ok') return '';
+
+  const labels = {
+    missing_subtitles: 'Missing',
+    ignored: 'Ignored',
+  };
+
+  const titles = {
+    missing_subtitles: 'No EN/FI subtitle pair found',
+    ignored: 'Movie ignored by user',
+  };
+
+  const label = labels[r.state] || r.state;
+  const title = titles[r.state] || r.state;
+
+  return `
+    <span
+      class="state-badge state-${r.state}"
+      title="${title}"
+    >${label}</span>
+  `;
 }
 
 function updateLibraryRow(row, data) {

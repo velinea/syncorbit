@@ -309,6 +309,10 @@ def main():
         if not folder.is_dir():
             continue
 
+        # Skip hidden/system folders
+        if folder.name.startswith("."):
+            continue
+
         movie = folder.name
         if movie in ignored:
             print(f"→ Skipping (ignored): {movie}")

@@ -559,3 +559,21 @@ thead th {
 .ref-en {
   background-color: #66b0ff; /* light blue */
 }
+.state-badge {
+  margin-left: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid #666;
+  opacity: 0.8;
+}
+
+.state-missing_subtitles {
+  color: #aaa;
+  border-color: #555;
+}
+
+.state-ignored {
+  color: #e0c97f;
+  border-color: #a08a3a;
+}
