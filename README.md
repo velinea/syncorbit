@@ -209,7 +209,7 @@ Expect iteration.
 
 ## License
 
-[MIT](https://github.com/velinea/syncorbit/blob/main/LICENSE.md)
+[MIT](https://github.com/velinea/syncorbit/blob/main/LICENSE)
 
 ## Credits & Inspiration
 
