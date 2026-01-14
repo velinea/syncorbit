@@ -580,15 +580,14 @@ thead th {
 .state-badge {
   margin-left: 6px;
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: 12px;
   border-radius: 4px;
   border: 1px solid #666;
-  opacity: 0.8;
 }
 
 .state-missing_subtitles {
-  color: #aaa;
-  border-color: #555;
+  color: #eee;
+  border-color: #aaa;
 }
 
 .state-ignored {
