@@ -902,11 +902,21 @@ app.get('/api/db/stats', (req, res) => {
       )
       .get().n;
 
+    const missing = db
+      .prepare(
+        `
+      SELECT COUNT(*) AS n FROM movies WHERE state = 'missing_subtitles'
+    `
+      )
+      .get().n;
+
     const stats = {
       total,
       ignored,
       decisions,
     };
+
+    stats.decisions['missing_subtitles'] = missing;
 
     for (const r of byDecision) {
       if (r.decision in stats.decisions) {

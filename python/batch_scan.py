@@ -372,10 +372,12 @@ def main():
             print(f"[STATE] Missing FI subtitle for {movie}")
 
             row = normalize_movie_row(
-                movie=movie,
-                state="missing_subtitles",
-                fi_mtime=None,
-                last_analyzed=now_ts(),
+                {
+                    "movie": movie,
+                    "state": "missing_subtitles",
+                    "fi_mtime": None,
+                    "last_analyzed": now,
+                }
             )
             upsert_movie_row(row)
             continue

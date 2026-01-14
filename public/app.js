@@ -733,6 +733,7 @@ async function loadLibraryStats() {
       `${s.decisions.synced} synced · ` +
       `${s.decisions.needs_adjustment} poor · ` +
       `${s.decisions.whisper_required} bad · ` +
+      `${s.decisions.missing_subtitles} missing · ` +
       `${s.ignored} ignored`;
   } catch {}
 }
