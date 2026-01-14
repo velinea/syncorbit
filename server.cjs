@@ -1047,4 +1047,13 @@ app.get('/api/poster/:movie', (req, res) => {
   }
 });
 
+app.get('/api/artwork/:movie', (req, res) => {
+  const artwork = path.join(MEDIA_ROOT, req.params.movie, 'backdrop.jpg');
+  if (fs.existsSync(artwork)) {
+    res.sendFile(artwork);
+  } else {
+    res.status(404).end();
+  }
+});
+
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'));

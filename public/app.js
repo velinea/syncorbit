@@ -666,6 +666,27 @@ async function openLibraryAnalysis(row) {
       return;
     } else {
       currentLibraryAnalysis = json.data;
+      const backdropUrl = `/api/artwork/${encodeURIComponent(row.movie)}`;
+      const panel = document.getElementById('librarySummary');
+
+      if (backdropUrl) {
+        panel.style.backgroundImage = `
+          linear-gradient(
+            to bottom,
+            rgba(2, 6, 23, 0.70),
+            rgba(2, 6, 23, 0.92)
+          ),
+          url("${backdropUrl}")
+        `;
+      } else {
+        panel.style.backgroundImage = `
+          linear-gradient(
+            to bottom,
+            rgba(2, 6, 23, 0.70),
+            rgba(2, 6, 23, 0.92)
+          )
+        `;
+      }
 
       // Render summary + graph
       renderSummary(json.data, librarySummaryPre);
