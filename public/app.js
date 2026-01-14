@@ -729,11 +729,11 @@ async function loadLibraryStats() {
     const s = json.stats;
 
     document.getElementById('libraryStats').textContent =
-      `${s.total} analyzed · ` +
+      `${s.total} movies analyzed · ` +
       `${s.decisions.synced} synced · ` +
-      `${s.decisions.needs_adjustment} poor · ` +
+      `${s.decisions.needs_adjustment} poor ` +
       `${s.decisions.whisper_required} bad · ` +
-      `${s.decisions.missing_subtitles} missing · ` +
+      `${s.decisions.missing_subtitles} missing FI subtitles · ` +
       `${s.ignored} ignored`;
   } catch {}
 }

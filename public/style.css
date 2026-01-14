@@ -101,8 +101,8 @@ h1 {
 
 #statusRow {
   display: grid;
-  grid-template-columns: 200px 1fr 430px 220px;
-  margin-bottom: 10px;
+  grid-template-columns: 200px 1fr 320px 250px;
+  margin-bottom: 6px;
 }
 
 #statusTitle1 {
@@ -125,6 +125,7 @@ h1 {
 
 #libraryStats {
   grid-column: 3;
+  margin-right: 20px;
 }
 
 /* Tabs */
