@@ -501,7 +501,6 @@ function renderLibraryTable() {
   let rows = libraryRows.filter(r => {
     if (searchTerm && !r.movie.toLowerCase().includes(searchTerm)) return false;
     if (statusFilter && r.decision !== statusFilter) return false;
-    if (r.ignored) return false; // always hide ignored
     return true;
   });
 
