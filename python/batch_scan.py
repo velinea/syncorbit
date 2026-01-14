@@ -365,10 +365,18 @@ def main():
 
         tgt = find_fi_sub(folder)
         fi_mtime = None
+
         if tgt and tgt.exists():
-            fi_mtime = tgt.stat().st_mtime
+            fi_mtime = int(tgt.stat().st_mtime)
         else:
-            print(f"[SKIP] No FI subtitle found for {movie}")
+            print(f"[STATE] Missing FI subtitle for {movie}")
+
+            upsert_movie(
+                movie=movie,
+                state="missing_subtitles",
+                fi_mtime=None,
+                last_analyzed=now_ts(),
+            )
             continue
 
         # --------------------------------------------------
