@@ -371,12 +371,13 @@ def main():
         else:
             print(f"[STATE] Missing FI subtitle for {movie}")
 
-            upsert_movie(
+            row = normalize_movie_row(
                 movie=movie,
                 state="missing_subtitles",
                 fi_mtime=None,
                 last_analyzed=now_ts(),
             )
+            upsert_movie_row(row)
             continue
 
         # --------------------------------------------------
