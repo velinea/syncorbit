@@ -25,12 +25,12 @@ const upsertMovieStmt = db.prepare(`
     movie, anchor_count, avg_offset, drift_span, decision,
     best_reference, reference_path,
     has_whisper, has_ffsubsync,
-    fi_mtime, last_analyzed, ignored
+    fi_mtime, last_analyzed, ignored, state
   ) VALUES (
     @movie, @anchor_count, @avg_offset, @drift_span, @decision,
     @best_reference, @reference_path,
     @has_whisper, @has_ffsubsync,
-    @fi_mtime, @last_analyzed, @ignored
+    @fi_mtime, @last_analyzed, @ignored, @state
   )
   ON CONFLICT(movie) DO UPDATE SET
     anchor_count=excluded.anchor_count,
@@ -43,7 +43,8 @@ const upsertMovieStmt = db.prepare(`
     has_ffsubsync=excluded.has_ffsubsync,
     fi_mtime=excluded.fi_mtime,
     last_analyzed=excluded.last_analyzed,
-    ignored=excluded.ignored
+    ignored=excluded.ignored,
+    state=excluded.state
 `);
 
 const getMovieStmt = db.prepare(`SELECT * FROM movies WHERE movie = ?`);
