@@ -24,6 +24,7 @@ const librarySummaryPre = document.getElementById('librarySummary');
 const libraryCanvas = document.getElementById('libraryGraph');
 const autoCorrectBtn = document.getElementById('autoCorrectBtn');
 const autoCorrectResult = document.getElementById('autoCorrectResult');
+const downloadBtn = document.getElementById('downloadBtn');
 const bulkBtn = document.getElementById('bulkActionsBtn');
 const bulkResultBox = document.getElementById('bulkResultBox');
 const bulkResultPre = document.getElementById('bulkResultPre');
