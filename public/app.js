@@ -379,13 +379,13 @@ if (autoCorrectBtn) {
 }
 
 async function onAutoCorrectClick() {
-  if (!currentLibraryRow || !currentLibraryAnalysis) {
+  if (!currentLibraryAnalysis) {
     autoCorrectResult.textContent = 'Select a movie with analysis first.';
     return;
   }
 
   const target = currentLibraryAnalysis.target_path;
-  const syncinfoPath = currentLibraryRow.syncinfo_path;
+  const syncinfoPath = currentLibraryAnalysis.syncinfo_path;
 
   if (!target || !syncinfoPath) {
     autoCorrectResult.textContent =
@@ -660,7 +660,6 @@ async function openLibraryAnalysis(row) {
       }
 
       clearLibraryGraph();
-      currentLibraryRow = null;
       currentLibraryAnalysis = null;
       if (autoCorrectBtn) autoCorrectBtn.disabled = true;
       return;
@@ -709,7 +708,6 @@ async function openLibraryAnalysis(row) {
     console.error('movieinfo error', err);
     librarySummaryPre.textContent = 'Failed to load analysis: ' + err.message;
     clearLibraryGraph();
-    currentLibraryRow = null;
     currentLibraryAnalysis = null;
     if (autoCorrectBtn) autoCorrectBtn.disabled = true;
   }

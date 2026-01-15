@@ -712,6 +712,7 @@ app.get('/api/analysis/:movie', (req, res) => {
     const normalized = {
       movie,
 
+      syncinfo_path: syncinfoPath,
       decision: raw.decision,
       best_reference: raw.best_reference,
       reference_path: raw.reference_path ?? raw.ref_path ?? null,

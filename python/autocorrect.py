@@ -6,6 +6,7 @@ import os
 from statistics import mean, median
 
 TIME_RE = re.compile(r"(?P<h>\d{2}):(?P<m>\d{2}):(?P<s>\d{2}),(?P<ms>\d{3})")
+AUTOCORRECT_DIR = "/app/data/autocorrect"
 
 
 def parse_time(s: str) -> float:
@@ -354,13 +355,21 @@ def main():
 
     target_srt = sys.argv[1]
     syncinfo_path = sys.argv[2]
-    out_srt = None
-    if len(sys.argv) >= 4:
-        out_srt = sys.argv[3]
 
-    if out_srt is None:
-        base, ext = os.path.splitext(target_srt)
-        out_srt = base + ".corrected" + ext
+    # Ensure output directory exists
+    os.makedirs(AUTOCORRECT_DIR, exist_ok=True)
+
+    if len(sys.argv) >= 4:
+        # Explicit output path (caller knows what they’re doing)
+        out_srt = sys.argv[3]
+    else:
+        # Default: write to autocorrect dir, never to media
+        base_name = os.path.basename(target_srt)
+        name, ext = os.path.splitext(base_name)
+        out_srt = os.path.join(
+            AUTOCORRECT_DIR,
+            f"{name}.corrected{ext}",
+        )
 
     try:
         with open(syncinfo_path, "r", encoding="utf-8") as f:
