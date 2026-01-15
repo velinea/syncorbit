@@ -118,10 +118,12 @@ def detect_piecewise_segments(offsets, max_segments=6):
     global_mad = median(abs_devs) or 1e-6
 
     # A probable "jump" if delta changes more than this between neighbors
-    jump_threshold = max(1.0, 3.0 * global_mad)
+    # jump_threshold = max(1.0, 3.0 * global_mad)
+    jump_threshold = max(0.15, 2.0 * global_mad)
 
     # Minimum anchors per segment
-    min_seg_points = max(5, len(pts) // 10)
+    # min_seg_points = max(5, len(pts) // 10)
+    min_seg_points = max(4, len(pts) // 20)
     segments_idx = []
     start_idx = 0
     for i in range(1, len(pts)):
@@ -157,7 +159,8 @@ def detect_piecewise_segments(offsets, max_segments=6):
 
     # Basic sanity: limit segment count, require each is not too noisy
     segments = segments[:max_segments]
-    good = [s for s in segments if s["mad"] < 0.8]
+    # good = [s for s in segments if s["mad"] < 0.8]
+    good = segments
 
     return good
 
@@ -300,8 +303,10 @@ def apply_stretch_offset(blocks, syncinfo: dict):
 def apply_piecewise(blocks, syncinfo: dict):
     offsets = syncinfo.get("clean_offsets") or syncinfo.get("offsets") or []
     segments = detect_piecewise_segments(offsets)
-    if not segments or len(segments) < 2:
-        raise ValueError("Not enough good segments for piecewise correction")
+    # if not segments or len(segments) < 2:
+    #      raise ValueError("Not enough good segments for piecewise correction")
+    if not segments:
+        raise ValueError("No usable segments for piecewise correction")
 
     # Sort segments by time just to be sure
     segments.sort(key=lambda s: s["t_start"])
@@ -324,6 +329,9 @@ def apply_piecewise(blocks, syncinfo: dict):
         seg = pick_segment(mid_t)
         # shift against that segment's median
         shift = -seg["median_delta"]
+        print(
+            f"[AC] t={mid_t:.1f}s  segΔ={seg['median_delta']:.3f}s  shift={-seg['median_delta']:.3f}s"
+        )
         out.append(
             {
                 "start": b["start"] + shift,
