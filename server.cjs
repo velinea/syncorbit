@@ -810,9 +810,6 @@ app.post('/api/autocorrect', (req, res) => {
   });
 });
 
-const path = require('path');
-const fs = require('fs');
-
 app.get('/api/autocorrect/download', (req, res) => {
   const { filename } = req.query;
 
