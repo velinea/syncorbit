@@ -39,7 +39,6 @@ let searchTimer = null;
 let libraryRows = [];
 let librarySortKey = 'fi_mtime';
 let librarySortDir = 'desc';
-let currentLibraryRow = null;
 let currentLibraryAnalysis = null;
 let currentBulkSelection = [];
 
@@ -421,11 +420,9 @@ async function onAutoCorrectClick() {
       }
 
       autoCorrectResult.textContent = `Auto-corrected (${m}). Output: ${out}\n${detail}`;
-
-      const correctedName = target.replace(/\.srt$/i, '.corrected.srt');
-
+      const downloadFilename = out.substring(out.lastIndexOf('/') + 1);
       const url =
-        '/api/autocorrect/download?filename=' + encodeURIComponent(correctedName);
+        '/api/autocorrect/download?filename=' + encodeURIComponent(downloadFilename);
 
       downloadBtn.innerHTML = `
         <a href="${url}" class="btn btn-primary">

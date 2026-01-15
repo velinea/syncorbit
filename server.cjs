@@ -778,35 +778,50 @@ app.post('/api/autocorrect', (req, res) => {
     return res.status(400).json({ error: 'target and syncinfo_path required' });
   }
 
-  const py = spawn('python3', ['python/autocorrect.py', target, syncinfo_path]);
+  const py = spawn('python3', ['/app/python/autocorrect.py', target, syncinfo_path]);
 
-  let out = '';
-  let errBuf = '';
+  let stdoutBuf = '';
+  let stderrBuf = '';
 
-  py.stdout.on('data', d => (out += d.toString()));
-  py.stderr.on('data', d => (errBuf += d.toString()));
+  py.stdout.on('data', d => {
+    stdoutBuf += d.toString();
+  });
+
+  py.stderr.on('data', d => {
+    const msg = d.toString();
+    stderrBuf += msg;
+    console.log('[autocorrect]', msg.trim());
+  });
 
   py.on('close', code => {
-    if (!out.trim()) {
+    if (code !== 0) {
       return res.status(500).json({
         status: 'error',
-        error: 'no_output',
-        detail: errBuf || `exit ${code}`,
+        error: 'autocorrect_failed',
+        exit_code: code,
+        stderr: stderrBuf,
       });
     }
 
+    let result = {};
     try {
-      const data = JSON.parse(out);
-      res.json(data);
+      if (stdoutBuf.trim()) {
+        result = JSON.parse(stdoutBuf);
+      }
     } catch (e) {
-      res.status(500).json({
+      return res.status(500).json({
         status: 'error',
         error: 'bad_json',
         detail: String(e),
-        raw: out,
-        stderr: errBuf,
+        raw: stdoutBuf,
       });
     }
+
+    res.json({
+      status: 'ok',
+      ...result,
+      log: stderrBuf.trim(),
+    });
   });
 });
 
