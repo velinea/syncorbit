@@ -330,7 +330,8 @@ def apply_piecewise(blocks, syncinfo: dict):
         # shift against that segment's median
         shift = -seg["median_delta"]
         print(
-            f"[AC] t={mid_t:.1f}s  segΔ={seg['median_delta']:.3f}s  shift={-seg['median_delta']:.3f}s"
+            f"[AC] t={mid_t:.1f}s  segΔ={seg['median_delta']:.3f}s  shift={-seg['median_delta']:.3f}s",
+            file=sys.stderr,
         )
         out.append(
             {

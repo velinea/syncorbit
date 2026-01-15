@@ -810,11 +810,30 @@ app.post('/api/autocorrect', (req, res) => {
   });
 });
 
-function findVideoFile(folder) {
-  const files = fs.readdirSync(folder);
-  const video = files.find(f => f.match(/\.(mkv|mp4|avi|mov)$/i));
-  return video ? path.join(folder, video) : null;
-}
+const path = require('path');
+const fs = require('fs');
+
+app.get('/api/autocorrect/download', (req, res) => {
+  const { filename } = req.query;
+
+  if (!filename) {
+    return res.status(400).json({ error: 'filename required' });
+  }
+
+  const baseDir = '/app/data/autocorrect';
+  const filePath = path.join(baseDir, filename);
+
+  // Prevent path traversal
+  if (!filePath.startsWith(baseDir)) {
+    return res.status(400).json({ error: 'invalid path' });
+  }
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'file not found' });
+  }
+
+  res.download(filePath);
+});
 
 // -------------------------
 // listsubs: return whisper + all .srt files

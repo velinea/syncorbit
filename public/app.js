@@ -386,7 +386,8 @@ async function onAutoCorrectClick() {
 
   const target = currentLibraryAnalysis.target_path;
   const syncinfoPath = currentLibraryAnalysis.syncinfo_path;
-
+  console.log('Auto-correct target:', target);
+  console.log('Auto-correct syncinfo:', syncinfoPath);
   if (!target || !syncinfoPath) {
     autoCorrectResult.textContent =
       'Missing target_path or syncinfo_path, cannot auto-correct.';
@@ -419,6 +420,17 @@ async function onAutoCorrectClick() {
       }
 
       autoCorrectResult.textContent = `Auto-corrected (${m}). Output: ${out}\n${detail}`;
+
+      const correctedName = target.replace(/\.srt$/i, '.corrected.srt');
+
+      const url =
+        '/api/autocorrect/download?filename=' + encodeURIComponent(correctedName);
+
+      downloadBtn.innerHTML = `
+        <a href="${url}" class="btn btn-primary">
+          Download corrected subtitle
+        </a>
+      `;
     } else if (data.status === 'whisper_required') {
       autoCorrectResult.textContent =
         'Cannot auto-correct safely. Marked as whisper_required.';
