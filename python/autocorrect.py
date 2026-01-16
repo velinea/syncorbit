@@ -7,6 +7,7 @@ import tempfile
 import subprocess
 from statistics import mean, median
 
+PY = "/app/.venv/bin/python3"
 TIME_RE = re.compile(r"(?P<h>\d{2}):(?P<m>\d{2}):(?P<s>\d{2}),(?P<ms>\d{3})")
 AUTOCORRECT_DIR = "/app/data/autocorrect"
 
@@ -353,7 +354,7 @@ def apply_piecewise(blocks, syncinfo: dict):
 
 def run_align_eval(ref_path: str, target_path: str) -> dict:
     cmd = [
-        "/app/.venv/bin/python3",
+        PY,
         "/app/python/align.py",
         ref_path,
         target_path,
@@ -531,6 +532,12 @@ def main():
             "drift_span_sec": float(after_sync.get("drift_span_sec") or 0.0),
             "avg_offset_sec": float(after_sync.get("avg_offset_sec") or 0.0),
         }
+
+        max_shift = 0.0
+        if meta.get("segments"):
+            shifts = [-s["median_delta"] for s in meta["segments"]]
+            if shifts:
+                max_shift = max(abs(s) for s in shifts)
 
         extra = {
             "max_shift_sec": max_shift,
