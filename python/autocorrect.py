@@ -352,23 +352,11 @@ def apply_piecewise(blocks, syncinfo: dict):
 
 
 def run_align_eval(ref_path: str, target_path: str) -> dict:
-    """
-    Run align.py on (ref, target) and return parsed syncinfo JSON.
-    Uses a temporary output file.
-    """
-    with tempfile.NamedTemporaryFile(
-        prefix="autocorrect_eval_",
-        suffix=".syncinfo",
-        delete=False,
-    ) as tmp:
-        out_path = tmp.name
-
     cmd = [
-        "python3",
+        "/app/.venv/bin/python3",
         "/app/python/align.py",
         ref_path,
         target_path,
-        out_path,
     ]
 
     p = subprocess.run(
@@ -381,15 +369,16 @@ def run_align_eval(ref_path: str, target_path: str) -> dict:
     if p.returncode != 0:
         raise RuntimeError(f"align eval failed: {p.stderr.strip() or p.stdout.strip()}")
 
-    with open(out_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    raw = p.stdout.strip()
+    if not raw:
+        raise RuntimeError("align eval produced no output")
 
     try:
-        os.unlink(out_path)
-    except OSError:
-        pass
-
-    return data
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"align eval did not return valid JSON: {e}\nRAW:\n{raw[:500]}"
+        )
 
 
 def downgrade(verdict: str) -> str:
@@ -573,6 +562,7 @@ def main():
             ),
             flush=True,
         )
+        sys.exit(1)
 
 
 if __name__ == "__main__":
