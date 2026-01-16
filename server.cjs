@@ -779,7 +779,7 @@ app.post('/api/autocorrect', (req, res) => {
     return res.status(400).json({ error: 'target and syncinfo_path required' });
   }
 
-  const py = spawn('python3', ['/app/python/autocorrect.py', target, syncinfo_path]);
+  const py = spawn('PY', ['/app/python/autocorrect.py', target, syncinfo_path]);
 
   let out = '';
   let errBuf = '';

@@ -527,19 +527,6 @@ def main():
 
         write_srt(new_blocks, out_srt)
 
-        meta_method = meta.get("method", method)
-        print(
-            json.dumps(
-                {
-                    "status": "ok",
-                    "method": meta_method,
-                    "output_file": out_srt,
-                    "meta": meta,
-                }
-            ),
-            flush=True,
-        )
-
         # --- BEFORE metrics (from original syncinfo) ---
         before = {
             "anchor_count": int(syncinfo.get("anchor_count") or 0),
