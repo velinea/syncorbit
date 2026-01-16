@@ -635,6 +635,7 @@ app.post('/api/reanalyze/:movie', async (req, res) => {
       fi_mtime: fiMtime,
       last_analyzed: now,
       ignored: ignoredFlag,
+      state: 'ok',
     };
 
     upsertMovieStmt.run(row);
@@ -780,16 +781,13 @@ app.post('/api/autocorrect', (req, res) => {
 
   const py = spawn('python3', ['/app/python/autocorrect.py', target, syncinfo_path]);
 
-  let stdoutBuf = '';
-  let stderrBuf = '';
+  let out = '';
+  let errBuf = '';
 
-  py.stdout.on('data', d => {
-    stdoutBuf += d.toString();
-  });
-
+  py.stdout.on('data', d => (out += d.toString()));
   py.stderr.on('data', d => {
     const msg = d.toString();
-    stderrBuf += msg;
+    errBuf += msg;
     console.log('[autocorrect]', msg.trim());
   });
 
@@ -799,50 +797,43 @@ app.post('/api/autocorrect', (req, res) => {
         status: 'error',
         error: 'autocorrect_failed',
         exit_code: code,
-        stderr: stderrBuf,
+        stderr: errBuf,
       });
     }
 
-    let result = {};
+    let data = null;
     try {
-      if (stdoutBuf.trim()) {
-        result = JSON.parse(stdoutBuf);
-      }
+      data = out.trim() ? JSON.parse(out) : {};
     } catch (e) {
       return res.status(500).json({
         status: 'error',
         error: 'bad_json',
         detail: String(e),
-        raw: stdoutBuf,
+        raw: out,
+        stderr: errBuf,
       });
     }
 
     res.json({
-      status: 'ok',
-      ...result,
-      log: stderrBuf.trim(),
+      ...data,
+      log: errBuf.trim(),
     });
   });
 });
 
 app.get('/api/autocorrect/download', (req, res) => {
-  const { filename } = req.query;
-
-  if (!filename) {
-    return res.status(400).json({ error: 'filename required' });
+  const filename = req.query.filename;
+  if (!filename) return res.status(400).json({ error: 'filename required' });
+  if (filename.includes('/') || filename.includes('\\')) {
+    return res.status(400).json({ error: 'invalid filename' });
   }
 
   const baseDir = '/app/data/autocorrect';
-  const filePath = path.join(baseDir, filename);
+  const filePath = require('path').join(baseDir, filename);
 
-  // Prevent path traversal
-  if (!filePath.startsWith(baseDir)) {
-    return res.status(400).json({ error: 'invalid path' });
-  }
-
-  if (!fs.existsSync(filePath)) {
+  const fs = require('fs');
+  if (!fs.existsSync(filePath))
     return res.status(404).json({ error: 'file not found' });
-  }
 
   res.download(filePath);
 });

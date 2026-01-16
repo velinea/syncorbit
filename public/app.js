@@ -386,8 +386,6 @@ async function onAutoCorrectClick() {
 
   const target = currentLibraryAnalysis.target_path;
   const syncinfoPath = currentLibraryAnalysis.syncinfo_path;
-  console.log('Auto-correct target:', target);
-  console.log('Auto-correct syncinfo:', syncinfoPath);
   if (!target || !syncinfoPath) {
     autoCorrectResult.textContent =
       'Missing target_path or syncinfo_path, cannot auto-correct.';
@@ -408,7 +406,8 @@ async function onAutoCorrectClick() {
 
     if (data.status === 'ok') {
       const m = data.method;
-      const out = data.output_file;
+      const outfile = data.output_file;
+      const verdict = data.verdict || 'review';
       const meta = data.meta || {};
       let detail = '';
 
@@ -419,8 +418,8 @@ async function onAutoCorrectClick() {
         detail = `Stretch: ${stretchPct}%  Shift: ${meta.shift_sec?.toFixed?.(3)} s`;
       }
 
-      autoCorrectResult.textContent = `Auto-corrected (${m}). Output: ${out}\n${detail}`;
-      const downloadFilename = out.substring(out.lastIndexOf('/') + 1);
+      autoCorrectResult.textContent = `Auto-corrected (${m}). Output: ${outfile}\n${detail}`;
+      const downloadFilename = outfile.substring(outfile.lastIndexOf('/') + 1);
       const url =
         '/api/autocorrect/download?filename=' + encodeURIComponent(downloadFilename);
 
@@ -429,6 +428,30 @@ async function onAutoCorrectClick() {
           Download corrected subtitle
         </a>
       `;
+
+      autoCorrectResult.innerHTML = `
+          <div><b>Auto-correct:</b> ${verdict.toUpperCase()}</div>
+          <div>Drift: ${json.before?.drift_span_sec ?? '?'}s → ${
+        json.after?.drift_span_sec ?? '?'
+      }s</div>
+          <div>Anchors: ${json.before?.anchor_count ?? '?'} → ${
+        json.after?.anchor_count ?? '?'
+      }</div>
+          <div style="margin-top:6px">
+            <a class="btn" href="/api/autocorrect/download?filename=${encodeURIComponent(
+              outFile
+            )}">
+              Download corrected subtitle
+            </a>
+          </div>
+          <details style="margin-top:6px">
+            <summary>Logs</summary>
+            <pre style="white-space:pre-wrap">${(json.log || '').replaceAll(
+              '<',
+              '&lt;'
+            )}</pre>
+          </details>
+        `;
     } else if (data.status === 'whisper_required') {
       autoCorrectResult.textContent =
         'Cannot auto-correct safely. Marked as whisper_required.';

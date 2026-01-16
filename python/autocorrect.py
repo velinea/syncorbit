@@ -3,6 +3,8 @@ import sys
 import json
 import re
 import os
+import tempfile
+import subprocess
 from statistics import mean, median
 
 TIME_RE = re.compile(r"(?P<h>\d{2}):(?P<m>\d{2}):(?P<s>\d{2}),(?P<ms>\d{3})")
@@ -349,6 +351,97 @@ def apply_piecewise(blocks, syncinfo: dict):
     return out, meta
 
 
+def run_align_eval(ref_path: str, target_path: str) -> dict:
+    """
+    Run align.py on (ref, target) and return parsed syncinfo JSON.
+    Uses a temporary output file.
+    """
+    with tempfile.NamedTemporaryFile(
+        prefix="autocorrect_eval_",
+        suffix=".syncinfo",
+        delete=False,
+    ) as tmp:
+        out_path = tmp.name
+
+    cmd = [
+        "python3",
+        "/app/python/align.py",
+        ref_path,
+        target_path,
+        out_path,
+    ]
+
+    p = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    if p.returncode != 0:
+        raise RuntimeError(f"align eval failed: {p.stderr.strip() or p.stdout.strip()}")
+
+    with open(out_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    try:
+        os.unlink(out_path)
+    except OSError:
+        pass
+
+    return data
+
+
+def downgrade(verdict: str) -> str:
+    if verdict == "accept":
+        return "review"
+    return "reject"
+
+
+def verdict_from_metrics(before: dict, after: dict, extra: dict) -> dict:
+    # Required fields
+    db = float(before.get("drift_span_sec") or before.get("drift_span") or 0.0)
+    da = float(after.get("drift_span_sec") or after.get("drift_span") or 0.0)
+    ab = int(before.get("anchor_count") or 0)
+    aa = int(after.get("anchor_count") or 0)
+
+    # Guard against divide by zero
+    if db <= 1e-6:
+        # If drift was essentially zero, there's nothing to improve
+        base_verdict = "reject"
+        ratio = None
+    else:
+        ratio = da / db
+        if ratio <= 0.5 and da <= 0.6:
+            base_verdict = "accept"
+        elif ratio <= 0.8:
+            base_verdict = "review"
+        else:
+            base_verdict = "reject"
+
+    verdict = base_verdict
+
+    # Safety downgrades
+    if ab > 0 and aa < 0.8 * ab:
+        verdict = downgrade(verdict)
+
+    max_shift = float(extra.get("max_shift_sec") or 0.0)
+    if abs(max_shift) > 1.0:
+        verdict = downgrade(verdict)
+
+    return {
+        "verdict": verdict,
+        "improvement_ratio": ratio,
+        "reasons": {
+            "drift_before": db,
+            "drift_after": da,
+            "anchors_before": ab,
+            "anchors_after": aa,
+            "max_shift_sec": max_shift,
+        },
+    }
+
+
 # ---------------------------------------------------------
 # CLI
 # ---------------------------------------------------------
@@ -446,6 +539,42 @@ def main():
             ),
             flush=True,
         )
+
+        # --- BEFORE metrics (from original syncinfo) ---
+        before = {
+            "anchor_count": int(syncinfo.get("anchor_count") or 0),
+            "drift_span_sec": float(syncinfo.get("drift_span_sec") or 0.0),
+            "avg_offset_sec": float(syncinfo.get("avg_offset_sec") or 0.0),
+        }
+
+        # --- AFTER metrics (re-align corrected subtitle) ---
+        after_sync = run_align_eval(syncinfo["ref_path"], out_srt)
+
+        after = {
+            "anchor_count": int(after_sync.get("anchor_count") or 0),
+            "drift_span_sec": float(after_sync.get("drift_span_sec") or 0.0),
+            "avg_offset_sec": float(after_sync.get("avg_offset_sec") or 0.0),
+        }
+
+        extra = {
+            "max_shift_sec": max_shift,
+        }
+
+        verdict_info = verdict_from_metrics(before, after, extra)
+
+        result = {
+            "status": "ok",
+            "method": meta.get("method", "piecewise"),
+            "output_file": os.path.basename(out_srt),
+            "segment_count": meta.get("segment_count", 0),
+            "before": before,
+            "after": after,
+        }
+
+        result.update(verdict_info)
+
+        print(json.dumps(result))
+
     except Exception as e:
         print(
             json.dumps(
