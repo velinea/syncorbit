@@ -317,6 +317,7 @@ if (alignBtn) {
   });
 }
 
+// Load subtitle choices for a movie
 async function loadSubtitleChoices(movieName) {
   const res = await fetch(`/api/listsubs/${encodeURIComponent(movieName)}`);
   const data = await res.json();
@@ -324,23 +325,17 @@ async function loadSubtitleChoices(movieName) {
   refSelect.innerHTML = '';
   targetSelect.innerHTML = '';
 
-  // Whisper first
-  if (data.whisper) {
-    refSelect.innerHTML += `<option value="${data.whisper}">Whisper Reference</option>`;
-  }
-
-  // Subs
   data.subs.forEach(s => {
-    refSelect.innerHTML += `<option value="${s.path}">${s.file}</option>`;
-    targetSelect.innerHTML += `<option value="${s.path}">${s.file}</option>`;
+    const label = `[${s.kind}] ${s.file}`;
+    refSelect.innerHTML += `<option value="${s.path}">${label}</option>`;
+    targetSelect.innerHTML += `<option value="${s.path}">${label}</option>`;
   });
 
-  // Enable Align on change
   refSelect.onchange = targetSelect.onchange = () => {
     alignBtn.disabled = !(refSelect.value && targetSelect.value);
   };
 
-  return data; // VERY IMPORTANT
+  return data;
 }
 
 // -------- LIBRARY VIEW --------

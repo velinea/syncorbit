@@ -838,58 +838,91 @@ app.get('/api/autocorrect/download', (req, res) => {
   res.download(filePath);
 });
 
-// -------------------------
-// listsubs: return whisper + all .srt files
-// -------------------------
-app.get('/api/listsubs/:movie', async (req, res) => {
+// List subtitles for a movie
+app.get('/api/listsubs/:movie', (req, res) => {
   const movieName = req.params.movie;
-  const movieDir = path.join(MEDIA_ROOT, movieName);
 
-  // Validate movie folder
-  if (!fs.existsSync(movieDir) || !fs.statSync(movieDir).isDirectory()) {
-    return res.json({ whisper: null, subs: [] });
+  const subs = [];
+
+  // -------------------------
+  // Helper: language guess
+  // -------------------------
+  function guessLang(filename) {
+    const lower = filename.toLowerCase();
+    if (lower.includes('.en.')) return 'en';
+    if (lower.includes('.eng.')) return 'en';
+    if (lower.includes('.fi.')) return 'fi';
+    if (lower.includes('.fin.')) return 'fi';
+    return 'unknown';
   }
 
-  // Whisper reference
-  const whisperDir = path.join(WHISPER_ROOT, movieName);
-  let whisperRef = null;
+  // -------------------------
+  // 1) Media folder subtitles
+  // -------------------------
+  const movieDir = path.join(MEDIA_ROOT, movieName);
+  if (fs.existsSync(movieDir) && fs.statSync(movieDir).isDirectory()) {
+    for (const f of fs.readdirSync(movieDir)) {
+      if (!f.toLowerCase().endsWith('.srt')) continue;
 
-  if (fs.existsSync(whisperDir)) {
-    const whisperSrt = path.join(whisperDir, 'ref.srt');
-    if (fs.existsSync(whisperSrt)) {
-      whisperRef = whisperSrt;
+      subs.push({
+        kind: 'media',
+        path: path.join(movieDir, f),
+        file: f,
+        lang: guessLang(f),
+      });
     }
   }
 
-  // List subtitle files inside movie folder
-  const files = fs.readdirSync(movieDir);
-  const subs = [];
-
-  for (const f of files) {
-    if (!f.toLowerCase().endsWith('.srt')) continue;
-
-    const fullPath = path.join(movieDir, f);
-
-    // Extract language tag
-    const lower = f.toLowerCase();
-
-    let lang = 'unknown';
-    if (lower.includes('.en.')) lang = 'en';
-    if (lower.includes('.eng.')) lang = 'en';
-    if (lower.includes('.fi.')) lang = 'fi';
-    if (lower.includes('.fin.')) lang = 'fi';
-
+  // -------------------------
+  // 2) Whisper reference
+  // -------------------------
+  const whisperSrt = path.join(WHISPER_ROOT, movieName, 'ref.srt');
+  if (fs.existsSync(whisperSrt)) {
     subs.push({
-      lang,
-      path: fullPath,
-      file: f,
+      kind: 'whisper',
+      path: whisperSrt,
+      file: 'ref.srt',
+      lang: 'en',
     });
   }
 
-  res.json({
-    whisper: whisperRef,
-    subs,
-  });
+  // -------------------------
+  // 3) Auto-correct outputs
+  // -------------------------
+  const acDir = path.join('/app/data/autocorrect');
+  if (fs.existsSync(acDir)) {
+    for (const f of fs.readdirSync(acDir)) {
+      if (!f.toLowerCase().endsWith('.srt')) continue;
+      if (!f.startsWith(movieName)) continue;
+
+      subs.push({
+        kind: 'autocorrect',
+        path: path.join(acDir, f),
+        file: f,
+        lang: guessLang(f),
+      });
+    }
+  }
+
+  // -------------------------
+  // 4) Ffsubsync outputs
+  // -------------------------
+  const ffDir = path.join('/app/data/resync', movieName);
+  if (fs.existsSync(ffDir)) {
+    for (const f of fs.readdirSync(ffDir)) {
+      if (!f.toLowerCase().endsWith('.srt')) continue;
+      if (!f.startsWith(movieName)) continue;
+
+      subs.push({
+        kind: 'resync',
+        path: path.join(ffDir, f),
+        file: f,
+        lang: guessLang(f),
+      });
+    }
+  }
+
+  res.json({ subs });
 });
 
 app.get('/api/db/stats', (req, res) => {
