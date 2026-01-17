@@ -301,18 +301,6 @@ button:disabled {
 
 /* Manual align */
 
-#summary {
-  white-space: pre-wrap;
-  font-family: Consolas, monospace;
-  background: #020617;
-  border-radius: 6px;
-  padding: 10px;
-  border: 1px solid #374151;
-  margin-top: 10px;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
 #graphCanvas {
   display: block;
   width: 100%;
@@ -513,9 +501,10 @@ thead th {
   font-size: 13px;
 }
 
-/* Library detail summary + graph */
+/* Summary detail + artwork + graph */
 
-#librarySummary {
+#librarySummary,
+#summary {
   white-space: pre-wrap;
   font-family: Consolas, monospace;
   font-size: 16px;

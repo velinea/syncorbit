@@ -152,6 +152,11 @@ function renderSummary(d, targetEl = summaryPre) {
     `Decision:   ${decision}`;
 }
 
+function setSummaryBackdrop(el, movieName) {
+  el.style.backgroundImage = `linear-gradient(rgba(2,6,23,.9), rgba(2,6,23,.9)),
+     url("/api/artwork/${encodeURIComponent(movieName)}")`;
+}
+
 function daysAgoFromUnix(ts) {
   if (!ts) return null;
   const nowSec = Date.now() / 1000;
@@ -284,6 +289,9 @@ if (alignBtn) {
       summaryPre.textContent = 'Please pick both reference and target subtitles.';
       return;
     }
+
+    let panel = document.getElementById('summary');
+    setSummaryBackdrop(panel, movieFolder);
 
     summaryPre.textContent = 'Running align.py…';
 
@@ -702,30 +710,11 @@ async function openLibraryAnalysis(row) {
       if (autoCorrectBtn) autoCorrectBtn.disabled = true;
       return;
     } else {
-      currentLibraryAnalysis = json.data;
-      const backdropUrl = `/api/artwork/${encodeURIComponent(row.movie)}`;
-      const panel = document.getElementById('librarySummary');
-
-      if (backdropUrl) {
-        panel.style.backgroundImage = `
-          linear-gradient(
-            to bottom,
-            rgba(2, 6, 23, 0.70),
-            rgba(2, 6, 23, 0.92)
-          ),
-          url("${backdropUrl}")
-        `;
-      } else {
-        panel.style.backgroundImage = `
-          linear-gradient(
-            to bottom,
-            rgba(2, 6, 23, 0.70),
-            rgba(2, 6, 23, 0.92)
-          )
-        `;
-      }
+      let panel = document.getElementById('librarySummary');
+      setSummaryBackdrop(panel, row.movie);
 
       // Render summary + graph
+      currentLibraryAnalysis = json.data;
       renderSummary(json.data, librarySummaryPre);
       drawGraph(libraryCanvas, json.data.clean_offsets || json.data.offsets || []);
     }
