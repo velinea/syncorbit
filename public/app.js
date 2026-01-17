@@ -141,7 +141,7 @@ function renderSummary(d, targetEl = summaryPre) {
   const decision = d.decision ?? 'unknown';
 
   targetEl.textContent =
-    `Ref:        ${d.reference_path || d.reference || ''}\n` +
+    `Ref:        ${d.ref_path || d.reference || ''}\n` +
     `Target:     ${d.target_path || d.target || ''}\n\n` +
     `Ref lines:  ${d.ref_count ?? '-'}\n` +
     `Tgt lines:  ${d.target_count ?? '-'}\n` +
