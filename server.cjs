@@ -13,6 +13,9 @@ const app = express();
 const PY = '/app/.venv/bin/python3';
 const MEDIA_ROOT = '/app/media';
 const DATA_ROOT = '/app/data';
+const WHISPER_ROOT = path.join(DATA_ROOT, 'ref');
+const FFSYNC_ROOT = path.join(DATA_ROOT, 'resync');
+const AC_ROOT = path.join(DATA_ROOT, 'autocorrect');
 const WHISPERX_URL = process.env.WHISPERX_URL || 'http://whisperx:8000';
 const IGNORE_FILE = path.join(
   process.env.SYNCORBIT_DATA || '/app/data',
@@ -889,7 +892,7 @@ app.get('/api/listsubs/:movie', (req, res) => {
   // -------------------------
   // 3) Auto-correct outputs
   // -------------------------
-  const acDir = path.join('/app/data/autocorrect');
+  const acDir = path.join(AC_ROOT);
   if (fs.existsSync(acDir)) {
     for (const f of fs.readdirSync(acDir)) {
       if (!f.toLowerCase().endsWith('.srt')) continue;
@@ -907,7 +910,7 @@ app.get('/api/listsubs/:movie', (req, res) => {
   // -------------------------
   // 4) Ffsubsync outputs
   // -------------------------
-  const ffDir = path.join('/app/data/resync', movieName);
+  const ffDir = path.join(FFSYNC_ROOT, movieName);
   if (fs.existsSync(ffDir)) {
     for (const f of fs.readdirSync(ffDir)) {
       if (!f.toLowerCase().endsWith('.srt')) continue;
