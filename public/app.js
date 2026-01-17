@@ -423,35 +423,45 @@ async function onAutoCorrectClick() {
       const url =
         '/api/autocorrect/download?filename=' + encodeURIComponent(downloadFilename);
 
-      downloadBtn.innerHTML = `
-        <a href="${url}" class="btn btn-primary">
-          Download corrected subtitle
-        </a>
-      `;
+      const e = json;
 
       autoCorrectResult.innerHTML = `
-          <div><b>Auto-correct:</b> ${verdict.toUpperCase()}</div>
-          <div>Drift: ${json.before?.drift_span_sec ?? '?'}s → ${
-        json.after?.drift_span_sec ?? '?'
-      }s</div>
-          <div>Anchors: ${json.before?.anchor_count ?? '?'} → ${
-        json.after?.anchor_count ?? '?'
-      }</div>
-          <div style="margin-top:6px">
-            <a class="btn" href="/api/autocorrect/download?filename=${encodeURIComponent(
-              outFile
-            )}">
-              Download corrected subtitle
-            </a>
-          </div>
-          <details style="margin-top:6px">
-            <summary>Logs</summary>
-            <pre style="white-space:pre-wrap">${(json.log || '').replaceAll(
-              '<',
-              '&lt;'
-            )}</pre>
-          </details>
-        `;
+        <b>Auto-correct evaluation</b>
+        <pre>
+        Method:        ${e.method}
+        Segments:      ${e.segments.count}
+
+        Drift span:    ${e.before.drift_span_sec.toFixed(
+          2
+        )} s → ${e.after.drift_span_sec.toFixed(2)} s
+        Avg offset:   ${e.before.avg_offset_sec.toFixed(
+          2
+        )} s → ${e.after.avg_offset_sec.toFixed(2)} s
+        Anchors:      ${e.before.anchor_count} → ${e.after.anchor_count}
+
+        Shift range:  ${e.shifts.min_sec.toFixed(2)} s … ${e.shifts.max_sec.toFixed(
+        2
+      )} s
+        Median shift: ${e.shifts.median_sec.toFixed(2)} s
+
+        Verdict:      ${e.verdict.toUpperCase()}
+        ${e.notes.length ? 'Notes:\n - ' + e.notes.join('\n - ') : ''}
+        </pre>
+        <div>
+          <a class="button" href="/api/autocorrect/download?filename=${encodeURIComponent(
+            outfile
+          )}">
+            Download corrected subtitle
+          </a>
+        </div>
+        <details style="margin-top:6px">
+          <summary>Logs</summary>
+          <pre style="white-space:pre-wrap">${(e.log || '').replaceAll(
+            '<',
+            '&lt;'
+          )}</pre>
+        </details>
+      `;
     } else if (data.status === 'whisper_required') {
       autoCorrectResult.textContent =
         'Cannot auto-correct safely. Marked as whisper_required.';

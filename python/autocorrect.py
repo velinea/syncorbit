@@ -539,9 +539,30 @@ def main():
             if shifts:
                 max_shift = max(abs(s) for s in shifts)
 
+        shifts = []
+        if meta.get("segments"):
+            shifts = [-s["median_delta"] for s in meta["segments"]]
+
+        shift_stats = {
+            "min_sec": min(shifts) if shifts else 0.0,
+            "max_sec": max(shifts) if shifts else 0.0,
+            "median_sec": statistics.median(shifts) if shifts else 0.0,
+        }
+
         extra = {
             "max_shift_sec": max_shift,
         }
+
+        notes = []
+
+        if after["drift_span_sec"] > 1.5:
+            notes.append("drift still large after correction")
+
+        if abs(shift_stats["min_sec"]) > 0.5 or abs(shift_stats["max_sec"]) > 0.5:
+            notes.append("large shift applied in at least one segment")
+
+        if after["anchor_count"] < 0.8 * before["anchor_count"]:
+            notes.append("anchor count dropped significantly")
 
         verdict_info = verdict_from_metrics(before, after, extra)
 
@@ -549,9 +570,13 @@ def main():
             "status": "ok",
             "method": meta.get("method", "piecewise"),
             "output_file": os.path.basename(out_srt),
-            "segment_count": meta.get("segment_count", 0),
             "before": before,
             "after": after,
+            "shifts": shift_stats,
+            "segments": {"count": meta.get("segment_count", 0)},
+            "verdict": verdict_info["verdict"],
+            "improvement_ratio": verdict_info["improvement_ratio"],
+            "notes": notes,
         }
 
         result.update(verdict_info)
