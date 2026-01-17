@@ -8,7 +8,7 @@ const resultsDiv = document.getElementById('results');
 const refPathInput = document.getElementById('refPath');
 const targetPathInput = document.getElementById('targetPath');
 const alignBtn = document.getElementById('alignBtn');
-const summaryPre = document.getElementById('summary');
+const manualSummaryPre = document.getElementById('manualSummary');
 const manualCanvas = document.getElementById('graphCanvas');
 const refSelect = document.getElementById('refSelect');
 const targetSelect = document.getElementById('targetSelect');
@@ -132,7 +132,7 @@ function shortStatus(s) {
 }
 
 // Render summary into a target <pre>
-function renderSummary(d, targetEl = summaryPre) {
+function renderSummary(d, targetEl = manualSummaryPre) {
   const anchors = d.anchor_count ?? 0;
   const avg = Number(d.avg_offset_sec ?? d.avg_offset ?? 0);
   const span = Number(d.drift_span_sec ?? d.drift_span ?? 0);
@@ -153,7 +153,7 @@ function renderSummary(d, targetEl = summaryPre) {
 }
 
 function setSummaryBackdrop(el, movieName) {
-  el.style.backgroundImage = `linear-gradient(rgba(2,6,23,.9), rgba(2,6,23,.9)),
+  el.style.backgroundImage = `linear-gradient(rgba(2,6,23,.7), rgba(2,6,23,.9)),
      url("/api/artwork/${encodeURIComponent(movieName)}")`;
 }
 
@@ -231,7 +231,7 @@ async function runSearch(q) {
       div.textContent = g.base;
 
       div.onclick = async () => {
-        summaryPre.textContent = `Selected: ${g.base}`;
+        manualSummaryPre.textContent = `Selected: ${g.base}`;
         clearManualGraph();
 
         // Determine real movie folder name from any subtitle path
@@ -245,6 +245,12 @@ async function runSearch(q) {
         const parts = subPath.split('/');
         const movieFolder = parts[parts.length - 2];
         console.log('Using folder:', movieFolder);
+
+        // Set backdrop
+        let panel = document.getElementById('manualSummary');
+        setSummaryBackdrop(panel, movieFolder);
+
+        manualSummaryPre.textContent = 'Running align.py…';
 
         // Load choices for this actual folder
         const data = await loadSubtitleChoices(movieFolder);
@@ -278,7 +284,7 @@ if (alignBtn) {
     const tgtSel = document.getElementById('targetSelect');
 
     if (!refSel || !tgtSel) {
-      summaryPre.textContent = 'Missing dropdowns (refSelect/targetSelect)';
+      manualSummaryPre.textContent = 'Missing dropdowns (refSelect/targetSelect)';
       return;
     }
 
@@ -286,14 +292,9 @@ if (alignBtn) {
     const target = tgtSel.value.trim();
 
     if (!reference || !target) {
-      summaryPre.textContent = 'Please pick both reference and target subtitles.';
+      manualSummaryPre.textContent = 'Please pick both reference and target subtitles.';
       return;
     }
-
-    let panel = document.getElementById('summary');
-    setSummaryBackdrop(panel, movieFolder);
-
-    summaryPre.textContent = 'Running align.py…';
 
     try {
       const res = await fetch('/api/align', {
@@ -304,12 +305,12 @@ if (alignBtn) {
 
       const data = await res.json();
       if (data.error) {
-        summaryPre.textContent = `Error: ${data.error}\n${data.detail || ''}`;
+        manualSummaryPre.textContent = `Error: ${data.error}\n${data.detail || ''}`;
         clearManualGraph();
         return;
       }
 
-      renderSummary(data, summaryPre);
+      renderSummary(data, manualSummaryPre);
       // drawGraph(manualCanvas, data.offsets || []);
       // Use clean_offsets if available
       const baseOffsets =
@@ -319,7 +320,7 @@ if (alignBtn) {
 
       drawGraph(manualCanvas, baseOffsets);
     } catch (e) {
-      summaryPre.textContent = 'Align failed: ' + e.message;
+      manualSummaryPre.textContent = 'Align failed: ' + e.message;
       clearManualGraph();
     }
   });

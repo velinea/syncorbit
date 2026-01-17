@@ -504,7 +504,7 @@ thead th {
 /* Summary detail + artwork + graph */
 
 #librarySummary,
-#summary {
+#manualSummary {
   white-space: pre-wrap;
   font-family: Consolas, monospace;
   font-size: 16px;
