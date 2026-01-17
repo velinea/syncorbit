@@ -423,7 +423,7 @@ async function onAutoCorrectClick() {
       const url =
         '/api/autocorrect/download?filename=' + encodeURIComponent(downloadFilename);
 
-      const e = json;
+      const e = data;
 
       autoCorrectResult.innerHTML = `
         <b>Auto-correct evaluation</b>

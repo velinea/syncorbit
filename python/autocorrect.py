@@ -546,7 +546,7 @@ def main():
         shift_stats = {
             "min_sec": min(shifts) if shifts else 0.0,
             "max_sec": max(shifts) if shifts else 0.0,
-            "median_sec": statistics.median(shifts) if shifts else 0.0,
+            "median_sec": median(shifts) if shifts else 0.0,
         }
 
         extra = {

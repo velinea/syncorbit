@@ -25,6 +25,18 @@ h1 {
   padding-left: 1em;
 }
 
+a.button {
+  color: #000;
+  text-decoration: none; /* Removes underline */
+  font-weight: normal;
+  background-color: #057f19;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: inline-block;
+}
+a.button:hover {
+  background-color: #046a15;
+}
 .card {
   background: #111827;
   padding: 0 16px;
