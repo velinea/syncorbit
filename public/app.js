@@ -141,7 +141,7 @@ function renderSummary(d, targetEl = manualSummaryPre) {
   const decision = d.decision ?? 'unknown';
 
   targetEl.textContent =
-    `Ref:        ${d.ref_path || d.reference || ''}\n` +
+    `Ref:        ${d.reference_path || d.ref_path || ''}\n` +
     `Target:     ${d.target_path || d.target || ''}\n\n` +
     `Ref lines:  ${d.ref_count ?? '-'}\n` +
     `Tgt lines:  ${d.target_count ?? '-'}\n` +
@@ -177,9 +177,8 @@ async function pollBatchProgress() {
   const p = await res.json();
 
   if (p.running) {
-    document.getElementById(
-      'batchStatus'
-    ).textContent = `Scanning folders ${p.index}/${p.total}: ${p.current_movie}`;
+    document.getElementById('batchStatus').textContent =
+      `Scanning folders ${p.index}/${p.total}: ${p.current_movie}`;
   }
 }
 
@@ -247,10 +246,7 @@ async function runSearch(q) {
         console.log('Using folder:', movieFolder);
 
         // Set backdrop
-        let panel = document.getElementById('manualSummary');
-        setSummaryBackdrop(panel, movieFolder);
-
-        manualSummaryPre.textContent = 'Running align.py…';
+        setSummaryBackdrop(manualSummaryPre, movieFolder);
 
         // Load choices for this actual folder
         const data = await loadSubtitleChoices(movieFolder);
@@ -296,6 +292,9 @@ if (alignBtn) {
       return;
     }
 
+    manualSummaryPre.textContent = 'Aligning…';
+    showSpinner();
+
     try {
       const res = await fetch('/api/align', {
         method: 'POST',
@@ -304,6 +303,7 @@ if (alignBtn) {
       });
 
       const data = await res.json();
+      hideSpinner();
       if (data.error) {
         manualSummaryPre.textContent = `Error: ${data.error}\n${data.detail || ''}`;
         clearManualGraph();
@@ -398,6 +398,7 @@ async function onAutoCorrectClick() {
 
   autoCorrectBtn.disabled = true;
   autoCorrectResult.textContent = 'Running auto-correction…';
+  showSpinner();
 
   try {
     const res = await fetch('/api/autocorrect', {
@@ -444,8 +445,8 @@ async function onAutoCorrectClick() {
         Anchors:      ${e.before.anchor_count} → ${e.after.anchor_count}
 
         Shift range:  ${e.shifts.min_sec.toFixed(2)} s … ${e.shifts.max_sec.toFixed(
-        2
-      )} s
+          2
+        )} s
         Median shift: ${e.shifts.median_sec.toFixed(2)} s
 
         Verdict:      ${e.verdict.toUpperCase()}
@@ -480,6 +481,7 @@ async function onAutoCorrectClick() {
   } finally {
     // Re-enable so user can retry
     autoCorrectBtn.disabled = false;
+    hideSpinner();
   }
 }
 
@@ -673,7 +675,6 @@ function updateLibraryRow(row, data) {
   // Update decision cell
   const decisionCell = row.querySelector('td:nth-child(8)');
   const decision = data.decision || 'unknown';
-
   decisionCell.innerHTML = shortStatus(decision);
 
   // Update badges if needed
@@ -711,8 +712,7 @@ async function openLibraryAnalysis(row) {
       if (autoCorrectBtn) autoCorrectBtn.disabled = true;
       return;
     } else {
-      let panel = document.getElementById('librarySummary');
-      setSummaryBackdrop(panel, row.movie);
+      setSummaryBackdrop(librarySummaryPre, row.movie);
 
       // Render summary + graph
       currentLibraryAnalysis = json.data;
@@ -915,10 +915,10 @@ function renderFfsubsyncResults(results) {
       r.normalizedScore == null
         ? 'text-gray-400'
         : r.normalizedScore < 50
-        ? 'text-red-400'
-        : r.normalizedScore < 200
-        ? 'text-yellow-400'
-        : 'text-green-400';
+          ? 'text-red-400'
+          : r.normalizedScore < 200
+            ? 'text-yellow-400'
+            : 'text-green-400';
 
     const shortLog = r.log
       .split('\n')
@@ -944,8 +944,8 @@ function renderFfsubsyncResults(results) {
         <div class="text-sm mb-2">
           <strong>Raw Score:</strong> <span>${r.rawScore ?? 'N/A'}</span><br>
           <strong>Normalized:</strong> <span class="${scoreColor}">${
-      r.normalizedScore ?? 'N/A'
-    }</span><br>
+            r.normalizedScore ?? 'N/A'
+          }</span><br>
           <strong>Offset (sec):</strong> ${r.offsetSeconds ?? 'N/A'}<br>
           <strong>Framerate factor:</strong> ${r.framerateFactor ?? 'N/A'}
         </div>
