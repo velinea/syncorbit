@@ -17,6 +17,7 @@ It combines automated alignment, speech-based references, and human-in-the-loop 
   - FFSubSync-aligned references
 - Scores and classifies results (synced / needs adjustment / bad)
 - Lets you reanalyze individual movies or run batch jobs
+- Lets yus autocorrect individual movies based on previous analysis
 - Keeps state in a database (not fragile CSV glue)
 - Designed for large libraries (thousands of movies)
 
@@ -51,6 +52,7 @@ SyncOrbit assumes those already exist.
       ├─ Python tools
       │    ├─ batch_scan.py
       │    ├─ align.py
+      |    |─ autocorrect.py
       │    └─ ffsubsync
       │
       └─ (optional)
@@ -76,6 +78,7 @@ SyncOrbit assumes those already exist.
 
    - batch_scan.py – full library analysis
    - align.py – subtitle alignment + statistics
+   - autocorrect.py - correct timing (also by segments)
    - ffsubsync – reference creation from audio
 
 3. WhisperX service (optional)
@@ -106,6 +109,9 @@ If WhisperX is not running, SyncOrbit continues to work normally.
   /resync
     /Movie Name (Year)
       *.synced.srt
+  /autocorrect
+    /Movie Name (Year)
+      *.corrected.srt
   ignore_list.json
   syncorbit.db
 ```
