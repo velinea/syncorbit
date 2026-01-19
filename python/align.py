@@ -420,8 +420,12 @@ def decide_quality(
     return "needs_adjustment"
 
 
-def detect_locally_adjusted(syncinfo: dict) -> bool:
-    offsets = syncinfo.get("clean_offsets") or syncinfo.get("offsets") or []
+def detect_locally_adjusted(
+    offsets: int,
+    avg_offset: float,
+    anchor_count: int,
+) -> bool:
+
     if len(offsets) < 10:
         return False
 
@@ -446,9 +450,6 @@ def detect_locally_adjusted(syncinfo: dict) -> bool:
     # Local volatility
     jumps = [abs(deltas[i + 1] - deltas[i]) for i in range(len(deltas) - 1)]
     median_jump = statistics.median(jumps) if jumps else 0.0
-
-    avg_offset = syncinfo.get("avg_offset_sec", 0.0)
-    anchor_count = syncinfo.get("anchor_count", 0)
 
     return (
         drift_span > 1.5
@@ -554,8 +555,9 @@ def main():
     )
 
     # Detect locally adjusted subtitles
-    if decision in ("needs_adjustment", "bad") and detect_locally_adjusted(syncinfo):
-        decision = "locally_adjusted"
+    if decision in ("needs_adjustment", "whisper_required"):
+        if detect_locally_adjusted(offsets, avg_offset_sec, anchor_count_clean):
+            decision = "locally_adjusted"
 
     out = {
         "ref_path": ref_path,
