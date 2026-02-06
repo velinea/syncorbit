@@ -757,9 +757,9 @@ async function loadLibraryStats() {
     document.getElementById('libraryStats').textContent =
       `${s.total} movies analyzed · ` +
       `${s.decisions.synced} synced · ` +
-      `${s.decisions.needs_adjustment} poor ` +
-      `${s.decisions.whisper_required} bad · ` +
-      `${s.decisions.missing_subtitles} missing FI subtitles · ` +
+      `${s.decisions.needs_adjustment || 0} poor · ` +
+      `${s.decisions.whisper_required || 0} bad · ` +
+      `${s.decisions.missing_subtitles} missing subtitles · ` +
       `${s.ignored} ignored`;
   } catch {}
 }

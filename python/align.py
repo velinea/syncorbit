@@ -420,45 +420,6 @@ def decide_quality(
     return "needs_adjustment"
 
 
-def detect_locally_adjusted(
-    offsets: int,
-    avg_offset: float,
-    anchor_count: int,
-) -> bool:
-
-    if len(offsets) < 10:
-        return False
-
-    # Extract deltas in time order
-    pts = []
-    for o in offsets:
-        t = o.get("ref_t") or o.get("t_ref")
-        d = o.get("delta") or o.get("offset")
-        if t is None or d is None:
-            continue
-        pts.append((t, d))
-
-    if len(pts) < 10:
-        return False
-
-    pts.sort(key=lambda x: x[0])
-    deltas = [d for _, d in pts]
-
-    # Global spread
-    drift_span = max(deltas) - min(deltas)
-
-    # Local volatility
-    jumps = [abs(deltas[i + 1] - deltas[i]) for i in range(len(deltas) - 1)]
-    median_jump = statistics.median(jumps) if jumps else 0.0
-
-    return (
-        drift_span > 1.5
-        and median_jump < 0.4
-        and abs(avg_offset) < 0.3
-        and anchor_count >= 40
-    )
-
-
 # ---------- Main ----------
 
 
@@ -553,11 +514,6 @@ def main():
         avg_offset_clean,
         robust_span,
     )
-
-    # Detect locally adjusted subtitles
-    if decision in ("needs_adjustment", "whisper_required"):
-        if detect_locally_adjusted(offsets, avg_offset_sec, anchor_count_clean):
-            decision = "locally_adjusted"
 
     out = {
         "ref_path": ref_path,
