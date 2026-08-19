@@ -1,4 +1,3 @@
-
 services:
   syncorbit:
     build: .
@@ -6,9 +5,10 @@ services:
     ports:
       - '5010:5010'
     volumes:
-      - ./python:/app/python:rw # OPTIONAL in dev mode
-      - /mnt/media/Media/Movies:/app/media:ro # your Unraid media
-      - ./data:/app/data # persistent storage
+      - ${MEDIA_PATH}:/app/media:ro
+      - ${DATA_PATH}:/app/data
     environment:
       - SYNCORBIT_DATA=/app/data
+      # Uncomment when running the optional WhisperX container:
+      # - WHISPERX_URL=http://whisperx:8000
     restart: unless-stopped

@@ -5,3 +5,5 @@ syncorbit_library_*.csv
 whisper.cpp
 pyproject.toml
 .eslintrc.cjs
+data
+.env

@@ -298,23 +298,55 @@ Once those questions are answered, the rest is easy.
 
 ## Getting Started (high level)
 
+SyncOrbit builds and runs locally — no CI/CD or image registry required.
+
 ```
-clone repo
 git clone https://github.com/velinea/syncorbit
 cd syncorbit
 
-# build container
-docker build -t syncorbit .
+# configure your media + data paths once
+cp .env.example .env
+# edit MEDIA_PATH and DATA_PATH in .env
 
-# run
-docker run \
-  -v /media:/media \
-  -v /app/data:/app/data \
-  -p 5010:5010 \
-  syncorbit
+# build + run
+docker compose up -d --build
 ```
 
-(Exact setup depends on your environment — Unraid supported.)
+## Deploying on Unraid
+
+Unraid runs the same image it builds, so there is no reason to build elsewhere.
+
+1. **One-time setup** — clone the repo into a user share:
+
+   ```
+   git clone https://github.com/velinea/syncorbit /mnt/user/appdata/syncorbit
+   ```
+
+2. **Configure paths** — create `.env` from `.env.example` and point `MEDIA_PATH`
+   at your movies and `DATA_PATH` at a persistent app-data folder.
+
+3. **Update, build, restart** — from the repo folder (or via the Unraid
+   *User Scripts* plugin):
+
+   ```
+   ./deploy.sh
+   ```
+
+   `deploy.sh` pulls latest code, rebuilds the image, and recreates the container.
+
+4. **Optional nightly batch scan** — run a scheduled User Script:
+
+   ```
+   docker exec syncorbit /app/.venv/bin/python3 /app/python/batch_scan.py
+   ```
+
+You can either manage the container through the Unraid Docker UI (point the
+template at the locally built `syncorbit:latest` image) or use Unraid's
+Compose Manager. The included `docker-compose.yml` supports both.
+
+## Optional: WhisperX Integration
+
+- Run WhisperX as a separate container
 
 ## Optional: WhisperX Integration
 
