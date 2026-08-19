@@ -960,54 +960,6 @@ ${r.log}
   });
 }
 
-document.querySelectorAll('.whisper-btn').forEach(btn => {
-  btn.onclick = async e => {
-    e.stopPropagation();
-
-    const movie = btn.dataset.movie;
-    const statusEl = btn.nextElementSibling;
-
-    btn.disabled = true;
-    statusEl.textContent = 'Starting…';
-
-    const res = await fetch(`/api/whisper/${encodeURIComponent(movie)}`, {
-      method: 'POST',
-    });
-    const json = await res.json();
-
-    if (!json.ok) {
-      statusEl.textContent = json.error;
-      btn.disabled = false;
-      return;
-    }
-
-    statusEl.textContent = 'Queued';
-
-    // Poll
-    const poll = setInterval(async () => {
-      const r = await fetch(`/api/whisper/status/${encodeURIComponent(movie)}`);
-      const s = await r.json();
-
-      if (!s.ok) return;
-
-      statusEl.textContent = `${s.state} ${Math.round((s.progress || 0) * 100)}%`;
-
-      if (s.state === 'done') {
-        clearInterval(poll);
-        statusEl.textContent = 'Done';
-        btn.disabled = false;
-        loadLibrary(); // refresh row
-      }
-
-      if (s.state === 'error') {
-        clearInterval(poll);
-        statusEl.textContent = 'Error';
-        btn.disabled = false;
-      }
-    }, 3000);
-  };
-});
-
 // -------- INITIAL SETUP --------
 
 // Clear both graphs initially

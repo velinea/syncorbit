@@ -1,8 +1,14 @@
 #!/bin/bash
 set -e
 
-MOVIES="/mnt/media/Movies"
-DATA="/mnt/data/syncorbit"
+# Manual fallback: batch-generate Whisper reference SRTs outside the SyncOrbit
+# container. Paths below assume the container mounts (/app/media, /app/data) —
+# run this with `docker exec -it <syncorbit-container> bash` or adjust to your
+# host paths. The normal path is the UI bulk "whisper" action, which uses the
+# whisperx-service inside Docker instead.
+
+MOVIES="/app/media/Movies"
+DATA="/app/data/syncorbit"
 SYNCORBIT_CSV="$DATA/syncorbit_library_export.csv"
 LOG="./whisperx_batch.log"
 IGNORE_FILE="$DATA/ignore_list.json"

@@ -160,7 +160,8 @@ ORDER BY fi_mtime DESC;
 EOF
 ```
 
-This recreates your old CSV, but now from the DB.
+Note: batch_scan.py also writes its own `syncorbit_library_export.csv`
+alongside the DB on every scan (a side artifact — the DB is canonical).
 
 ## 🔍 12️⃣ Debug a UI issue fast
 

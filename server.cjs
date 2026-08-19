@@ -63,6 +63,18 @@ console.log('EXECJS_RUNTIME:', process.env.EXECJS_RUNTIME);
 app.use(express.json());
 app.use(express.static('public'));
 
+// Prevent path traversal via URL params: resolve and ensure the result
+// stays inside the base directory.
+function safeJoin(base, name) {
+  if (typeof name !== 'string' || !name || name.includes('\0')) return null;
+  const baseResolved = path.resolve(base);
+  const joined = path.resolve(base, name);
+  if (joined === baseResolved || joined.startsWith(baseResolved + path.sep)) {
+    return joined;
+  }
+  return null;
+}
+
 // --------------------------
 // Helper functions
 // -------------------------
@@ -495,9 +507,9 @@ app.post('/api/run-batch-scan', (req, res) => {
 
 app.post('/api/reanalyze/:movie', async (req, res) => {
   const movie = req.params.movie;
-  const movieDir = path.join(MEDIA_ROOT, movie);
+  const movieDir = safeJoin(MEDIA_ROOT, movie);
 
-  if (!fs.existsSync(movieDir)) {
+  if (!movieDir || !fs.existsSync(movieDir)) {
     return res.json({ ok: false, error: 'movie_not_found' });
   }
 
@@ -705,7 +717,13 @@ app.get('/api/library', (req, res) => {
 app.get('/api/analysis/:movie', (req, res) => {
   try {
     const movie = req.params.movie;
-    const syncinfoPath = path.join(DATA_ROOT, 'analysis', movie, 'analysis.syncinfo');
+    const analysisRoot = path.join(DATA_ROOT, 'analysis');
+    const movieDir = safeJoin(analysisRoot, movie);
+    if (!movieDir) {
+      return res.json({ ok: false, error: 'invalid_movie' });
+    }
+
+    const syncinfoPath = path.join(movieDir, 'analysis.syncinfo');
 
     if (!fs.existsSync(syncinfoPath)) {
       return res.json({ ok: false, error: 'no_syncinfo' });
@@ -749,9 +767,18 @@ app.get('/api/analysis/:movie', (req, res) => {
 
 app.get('/api/movieinfo', (req, res) => {
   const file = req.query.file; // absolute path to the .syncinfo file
-  if (!file) return res.status(400).json({ error: 'missing file param' });
+  if (typeof file !== 'string' || !file || !file.endsWith('.syncinfo')) {
+    return res.status(400).json({ error: 'missing or invalid file param' });
+  }
 
-  fs.readFile(file, 'utf8', (err, data) => {
+  // Only allow files under the analysis directory (no arbitrary file reads)
+  const analysisRoot = path.resolve(DATA_ROOT, 'analysis');
+  const resolved = path.resolve(file);
+  if (resolved !== analysisRoot && !resolved.startsWith(analysisRoot + path.sep)) {
+    return res.status(403).json({ error: 'forbidden path' });
+  }
+
+  fs.readFile(resolved, 'utf8', (err, data) => {
     if (err) return res.status(500).json({ error: 'cannot read file' });
     try {
       res.json(JSON.parse(data));
@@ -862,8 +889,8 @@ app.get('/api/listsubs/:movie', (req, res) => {
   // -------------------------
   // 1) Media folder subtitles
   // -------------------------
-  const movieDir = path.join(MEDIA_ROOT, movieName);
-  if (fs.existsSync(movieDir) && fs.statSync(movieDir).isDirectory()) {
+  const movieDir = safeJoin(MEDIA_ROOT, movieName);
+  if (movieDir && fs.existsSync(movieDir) && fs.statSync(movieDir).isDirectory()) {
     for (const f of fs.readdirSync(movieDir)) {
       if (!f.toLowerCase().endsWith('.srt')) continue;
 
@@ -977,12 +1004,6 @@ app.get('/api/db/stats', (req, res) => {
 
     stats.decisions['missing_subtitles'] = missing;
 
-    for (const r of byDecision) {
-      if (r.decision in stats.decisions) {
-        stats.decisions[r.decision] = r.n;
-      }
-    }
-
     res.json({ ok: true, stats });
   } catch (err) {
     console.error('/api/db/stats failed:', err);
@@ -992,123 +1013,64 @@ app.get('/api/db/stats', (req, res) => {
 
 async function submitWhisperJobForMovie(movie) {
   const movieDir = path.join(MEDIA_ROOT, movie);
-  if (!fs.existsSync(movieDir)) return false;
+  if (!fs.existsSync(movieDir)) return { ok: false, error: 'movie_not_found' };
+
+  const refDir = path.join(DATA_ROOT, 'ref', movie);
+  const refPath = path.join(refDir, 'ref.srt');
+
+  // Existing reference → just refresh its mtime so "newest reference wins"
+  if (fs.existsSync(refPath)) {
+    const nowTs = new Date();
+    fs.utimesSync(refPath, nowTs, nowTs);
+    return { ok: true, action: 'touched' };
+  }
 
   const video = fs.readdirSync(movieDir).find(f => /\.(mkv|mp4|avi|mov)$/i.test(f));
+  if (!video) return { ok: false, error: 'no_video_found' };
 
-  if (!video) return false;
+  if (!(await whisperAvailable())) {
+    return { ok: false, error: 'whisperx_not_configured' };
+  }
 
+  fs.mkdirSync(refDir, { recursive: true });
   const videoPath = path.join(movieDir, video);
-  const outDir = path.join(DATA_ROOT, 'ref', movie);
-  const outPath = path.join(outDir, 'ref.srt');
 
-  fs.mkdirSync(outDir, { recursive: true });
-
-  await fetch(`${WHISPERX_URL}/transcribe`, {
+  const resp = await fetch(`${WHISPERX_URL}/transcribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      video_path: videoPath,
-      output_srt: outPath,
-    }),
+    body: JSON.stringify({ video_path: videoPath, output_path: refPath }),
   });
 
-  return true;
-}
-
-async function getWhisperJobStatus(jobId) {
-  const res = await fetch(`${WHISPERX_URL}/status/${jobId}`);
-  if (!res.ok) {
-    throw new Error(`WhisperX status failed`);
+  if (!resp.ok) {
+    const text = await resp.text();
+    return { ok: false, error: `whisper_failed: ${text}` };
   }
-  return res.json(); // { state, progress, message }
+
+  return { ok: true, action: 'whisper_requested' };
 }
 
 app.post('/api/whisper/:movie', async (req, res) => {
-  const movie = req.params.movie;
-  const movieDir = path.join(MEDIA_ROOT, movie);
-
-  if (!fs.existsSync(movieDir)) {
-    return res.json({ ok: false, error: 'movie_not_found' });
-  }
-
-  // Find video
-  const video = fs.readdirSync(movieDir).find(f => /\.(mkv|mp4|avi|mov)$/i.test(f));
-
-  if (!video) {
-    return res.json({ ok: false, error: 'no_video_found' });
-  }
-
-  const videoPath = path.join(movieDir, video);
-  const refDir = path.join(DATA_ROOT, 'ref', movie);
-  const outputPath = path.join(refDir, 'ref.srt');
-
-  if (fs.existsSync(outputPath)) {
-    return res.json({ ok: false, error: 'ref_already_exists' });
-  }
-
-  try {
-    const { job_id } = await submitWhisperJob({
-      videoPath,
-      outputPath,
-    });
-
-    // Optional: persist job id (simple JSON file)
-    const jobsFile = path.join(DATA_ROOT, 'whisper_jobs.json');
-    let jobs = {};
-    if (fs.existsSync(jobsFile)) {
-      jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
-    }
-    jobs[movie] = { job_id, started: Date.now() };
-    fs.writeFileSync(jobsFile, JSON.stringify(jobs, null, 2));
-
-    res.json({ ok: true, movie, job_id });
-  } catch (err) {
-    res.json({ ok: false, error: err.message });
-  }
-});
-
-app.get('/api/whisper/status/:movie', async (req, res) => {
-  const movie = req.params.movie;
-  const jobsFile = path.join(DATA_ROOT, 'whisper_jobs.json');
-
-  if (!fs.existsSync(jobsFile)) {
-    return res.json({ ok: false, error: 'no_jobs' });
-  }
-
-  const jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
-  const entry = jobs[movie];
-
-  if (!entry) {
-    return res.json({ ok: false, error: 'no_job_for_movie' });
-  }
-
-  try {
-    const status = await getWhisperJobStatus(entry.job_id);
-
-    // Auto-cleanup on completion
-    if (status.state === 'done' || status.state === 'error') {
-      delete jobs[movie];
-      fs.writeFileSync(jobsFile, JSON.stringify(jobs, null, 2));
-    }
-
-    res.json({ ok: true, ...status });
-  } catch (err) {
-    res.json({ ok: false, error: err.message });
-  }
+  const result = await submitWhisperJobForMovie(req.params.movie);
+  res.json({ ok: result.ok, ...result });
 });
 
 async function whisperAvailable() {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 1500);
   try {
-    const r = await fetch(`${WHISPERX_URL}/health`, { timeout: 1000 });
+    const r = await fetch(`${WHISPERX_URL}/health`, { signal: ctrl.signal });
     return r.ok;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 app.get('/api/poster/:movie', (req, res) => {
-  const poster = path.join(MEDIA_ROOT, req.params.movie, 'folder.jpg');
+  const dir = safeJoin(MEDIA_ROOT, req.params.movie);
+  if (!dir) return res.status(400).end();
+  const poster = path.join(dir, 'folder.jpg');
   if (fs.existsSync(poster)) {
     res.sendFile(poster);
   } else {
@@ -1117,7 +1079,9 @@ app.get('/api/poster/:movie', (req, res) => {
 });
 
 app.get('/api/artwork/:movie', (req, res) => {
-  const artwork = path.join(MEDIA_ROOT, req.params.movie, 'backdrop.jpg');
+  const dir = safeJoin(MEDIA_ROOT, req.params.movie);
+  if (!dir) return res.status(400).end();
+  const artwork = path.join(dir, 'backdrop.jpg');
   if (fs.existsSync(artwork)) {
     res.sendFile(artwork);
   } else {

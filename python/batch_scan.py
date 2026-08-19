@@ -365,6 +365,7 @@ def main():
 
         tgt = find_fi_sub(folder)
         fi_mtime = None
+        now = time.time()
 
         if tgt and tgt.exists():
             fi_mtime = int(tgt.stat().st_mtime)
@@ -423,7 +424,6 @@ def main():
             with open(syncinfo_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            now = time.time()
             whisper_ref_path = REF_ROOT / movie / "ref.srt"
 
             row = {

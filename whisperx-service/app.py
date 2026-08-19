@@ -1,12 +1,12 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel
-import whisperx
-import uuid
 import os
-import threading
-from pathlib import Path
+import subprocess
+import shlex
 import logging
 import time
+import traceback
+from pathlib import Path
 
 # -----------------------------
 # Config
@@ -20,25 +20,8 @@ VAD_METHOD = "silero"
 # -----------------------------
 app = FastAPI(title="WhisperX Service")
 
-jobs = {}  # job_id -> status dict
-job_queue = []
-queue_lock = threading.Lock()
-worker_running = False
-
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("whisperx-service")
-
-# -----------------------------
-# Load model ONCE
-# -----------------------------
-print("Loading WhisperX model...")
-model = whisperx.load_model(
-    "small",
-    device=DEVICE,
-    compute_type=COMPUTE_TYPE,
-    vad_method=VAD_METHOD,
-)
-print("WhisperX model loaded")
 
 
 # -----------------------------
@@ -51,72 +34,22 @@ class TranscribeRequest(BaseModel):
 
 
 # -----------------------------
-# Worker
-# -----------------------------
-def worker_loop():
-    global worker_running
-
-    while True:
-        with queue_lock:
-            if not job_queue:
-                worker_running = False
-                return
-            job_id = job_queue.pop(0)
-
-        job = jobs[job_id]
-        job["state"] = "running"
-        job["progress"] = 0.1
-
-        try:
-            video = job["video_path"]
-            out_srt = job["output_path"]
-
-            os.makedirs(os.path.dirname(out_srt), exist_ok=True)
-
-            job["message"] = "Transcribing audio"
-            result = model.transcribe(video, language=job["language"])
-            job["progress"] = 0.7
-
-            job["message"] = "Writing SRT"
-            whisperx.utils.write_srt(result["segments"], out_srt)
-
-            job["state"] = "done"
-            job["progress"] = 1.0
-            job["message"] = "Completed"
-
-        except Exception as e:
-            job["state"] = "error"
-            job["message"] = str(e)
-
-        time.sleep(0.2)
-
-
-def start_worker_if_needed():
-    global worker_running
-    with queue_lock:
-        if worker_running:
-            return
-        worker_running = True
-
-    thread = threading.Thread(target=worker_loop, daemon=True)
-    thread.start()
-
-
-# -----------------------------
 # API
 # -----------------------------
-import subprocess
-import shlex
-
-
 @app.post("/transcribe")
 def transcribe(req: TranscribeRequest):
-    import traceback
+    """
+    Transcribe a video and write a Whisper reference SRT.
 
+    Synchronous: the caller (SyncOrbit) waits for the result. WhisperX names
+    the SRT after the media, so we normalize it to ref.srt afterwards.
+    """
     try:
         video = Path(req.video_path)
         out = Path(req.output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
+
+        language = req.language or "en"
 
         cmd = [
             "whisperx",
@@ -124,13 +57,13 @@ def transcribe(req: TranscribeRequest):
             "--model",
             "small",
             "--device",
-            "cpu",
+            DEVICE,
             "--compute_type",
-            "int8",
+            COMPUTE_TYPE,
             "--vad_method",
-            "silero",
+            VAD_METHOD,
             "--language",
-            "en",
+            language,
             "--output_format",
             "srt",
             "--output_dir",
@@ -177,19 +110,6 @@ def transcribe(req: TranscribeRequest):
         return {"ok": False, "error": "internal_error"}
 
 
-@app.get("/status/{job_id}")
-def status(job_id: str):
-    job = jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="job not found")
-
-    return {
-        "state": job["state"],
-        "progress": job["progress"],
-        "message": job["message"],
-    }
-
-
 @app.get("/health")
 def health():
-    return {"ok": True, "model_loaded": True}
+    return {"ok": True}
