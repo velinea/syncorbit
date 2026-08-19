@@ -18,9 +18,6 @@ function ensureColumn(table, column) {
   }
 }
 
-// RUN MIGRATIONS HERE
-ensureColumn('movies', 'state');
-
 function initDb() {
   db.exec(`
     PRAGMA journal_mode=WAL;
@@ -49,6 +46,8 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_movies_fi_mtime ON movies(fi_mtime);
     CREATE INDEX IF NOT EXISTS idx_movies_decision ON movies(decision);
   `);
+
+  ensureColumn('movies', 'state');
 }
 
 module.exports = { db, initDb };
