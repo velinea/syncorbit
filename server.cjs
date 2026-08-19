@@ -622,8 +622,8 @@ app.post('/api/reanalyze/:movie', async (req, res) => {
       anchor_count: data.anchor_count ?? data.raw_anchor_count ?? 0,
       avg_offset: data.median_offset_sec ?? data.avg_offset_sec ?? 0,
       drift_span:
-        data.robust_drift_span_sec ??
         data.drift_span_sec ??
+        data.robust_drift_span_sec ??
         data.raw_drift_span_sec ??
         0,
 
@@ -731,7 +731,7 @@ app.get('/api/analysis/:movie', (req, res) => {
       avg_offset: raw.median_offset_sec ?? raw.avg_offset_sec,
       max_offset: raw.max_offset_sec,
       min_offset: raw.min_offset_sec,
-      drift_span: raw.robust_drift_span_sec ?? raw.drift_span_sec,
+      drift_span: raw.drift_span_sec ?? raw.robust_drift_span_sec,
 
       // Graph data
       offsets: raw.clean_offsets ?? raw.offsets,

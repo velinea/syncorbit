@@ -15,7 +15,11 @@ Outputs JSON to stdout with fields:
       "target_count": int,
       "anchor_count": int,
       "avg_offset_sec": float,
-      "drift_span_sec": float,
+      "drift_span_sec": float,        # smoothed: median delta per time bin
+      "residual_drift_span_sec": float,
+      "linear_drift_per_hour": float,
+      "linear_fit_r2": float,
+      "drift_bins": [...],
       "min_offset_sec": float,
       "max_offset_sec": float,
       "offsets": [
@@ -28,7 +32,7 @@ Outputs JSON to stdout with fields:
       ],
       "decision": "synced" | "needs_adjustment" | "whisper_required"
     }
-"""
+    """
 
 import json
 import re
@@ -47,14 +51,20 @@ from fastembed import TextEmbedding
 # Similarity threshold for raw matches
 MIN_SIM = 0.40  # was ~0.35; you can push up/down a bit
 
-# Max ratio between longer/shorter text lengths
-MAX_LEN_RATIO = 2  # you saw 3 → good results
+# Max ratio between longer/shorter text lengths.
+# Finnish lines (especially older translations) are often much longer than
+# their English counterpart — keep the gate loose or we starve the anchor pool.
+MAX_LEN_RATIO = 4
 
-# Max ratio between longer/shorter cue durations
-MAX_DUR_RATIO = 2
+# Max ratio between longer/shorter cue durations.
+# Different reading rhythms between languages make durations differ naturally.
+MAX_DUR_RATIO = 3.5
 
 # Minimum characters for a line to be considered as an anchor candidate
 MIN_CHARS = 8
+
+# Number of time bins used for the smoothed (median-per-bin) drift metric
+DRIFT_BINS = 12
 
 # Residual threshold bounds for regression-based cleanup
 RESID_MIN = 0.8  # don't be tighter than this
@@ -241,7 +251,14 @@ FILLER_SET = {
     "hey",
     "hi",
     "bye",
-    # you can expand this with Finnish fillers too if needed
+    # Finnish fillers
+    "joo",
+    "niin",
+    "okei",
+    "ai",
+    "jaa",
+    "oho",
+    "hm",
 }
 
 
@@ -391,16 +408,102 @@ def compute_metrics(anchors: List[dict]) -> dict:
     }
 
 
+def compute_binned_drift(offsets, n_bins=DRIFT_BINS):
+    """
+    Smoothed drift: median delta per time bin.
+
+    Per-cue deltas jitter when the reference and target have different cue
+    boundaries / line lengths (common between EN and FI), which inflates a
+    raw min-max or MAD span even when every line starts correctly. Medians
+    over time bins cancel that jitter and reveal genuine progressive drift.
+    Returns (drift_span, bins).
+    """
+    pts = sorted(
+        [
+            (
+                o.get("ref_t") or o.get("t_ref") or 0.0,
+                o.get("delta") or o.get("offset") or 0.0,
+            )
+            for o in offsets
+        ],
+        key=lambda x: x[0],
+    )
+    if not pts:
+        return 0.0, []
+
+    if len(pts) < n_bins:
+        deltas = [p[1] for p in pts]
+        return max(deltas) - min(deltas), [
+            {"ref_t": p[0], "delta": p[1]} for p in pts
+        ]
+
+    k = max(1, len(pts) // n_bins)
+    bins = []
+    for i in range(0, len(pts), k):
+        grp = pts[i : i + k]
+        if not grp:
+            continue
+        bins.append(
+            {
+                "ref_t": statistics.median(p[0] for p in grp),
+                "delta": statistics.median(p[1] for p in grp),
+            }
+        )
+
+    span = max(b["delta"] for b in bins) - min(b["delta"] for b in bins)
+    return span, bins
+
+
+def linear_fit_delta(offsets):
+    """
+    Fit delta ~ a * ref_t + b over anchors.
+    Returns (slope_per_sec, r2, residual_span_sec).
+    A genuine progressive drift is linear; residuals after the fit are the
+    part that a stretch correction cannot remove.
+    """
+    pts = [
+        (
+            o.get("ref_t") or o.get("t_ref") or 0.0,
+            o.get("delta") or o.get("offset") or 0.0,
+        )
+        for o in offsets
+    ]
+    if len(pts) < 5:
+        return 0.0, 0.0, 0.0
+
+    ts = np.array([p[0] for p in pts], dtype=np.float64)
+    ds = np.array([p[1] for p in pts], dtype=np.float64)
+
+    t_mean = float(ts.mean())
+    d_mean = float(ds.mean())
+
+    num = float(((ts - t_mean) * (ds - d_mean)).sum())
+    den = float(((ts - t_mean) ** 2).sum()) or 1e-9
+    a = num / den
+    b = d_mean - a * t_mean
+
+    resid = ds - (a * ts + b)
+    ss_tot = float(((ds - d_mean) ** 2).sum()) or 1e-9
+    ss_res = float((resid ** 2).sum())
+    r2 = 1.0 - ss_res / ss_tot
+
+    return a, r2, float(resid.max() - resid.min())
+
+
 def decide_quality(
-    anchor_count: int, ref_count: int, avg_offset: float, drift_span: float
+    anchor_count: int,
+    ref_count: int,
+    avg_offset: float,
+    drift_span: float,
+    residual_span: float,
+    anchor_spread: float,
 ) -> str:
     """
     Decision logic for SyncOrbit:
-      - 'synced': good anchors, low drift, small offset
+      - 'synced': good anchors, low smoothed drift, small offset
       - 'whisper_required': few anchors or large drift/offset
       - 'needs_adjustment': somewhere in between
     """
-    # --- Anchor percentage logic (Option A) ---
     ref_count_safe = ref_count if ref_count > 0 else 1
     anchor_ratio = anchor_count / ref_count_safe  # fraction of matched lines
 
@@ -408,13 +511,25 @@ def decide_quality(
     if anchor_ratio < 0.03:
         return "whisper_required"
 
+    # Smoothed drift too large → genuinely drifting, need a reference
     if drift_span > 3.5:
+        return "whisper_required"
+
+    # Residual after removing linear drift still large → non-linear drift
+    if residual_span > 2.5:
         return "whisper_required"
 
     if abs(avg_offset) > 4.0:
         return "whisper_required"
 
-    if anchor_ratio >= 0.06 and drift_span <= 2.0 and abs(avg_offset) <= 1.0:
+    # Per-cue spread sanity: small smoothed drift but huge anchor spread means
+    # cue boundaries are chaotic, not cleanly synced.
+    if (
+        anchor_ratio >= 0.06
+        and drift_span <= 1.5
+        and abs(avg_offset) <= 1.5
+        and anchor_spread <= 2.5
+    ):
         return "synced"
 
     return "needs_adjustment"
@@ -507,11 +622,17 @@ def main():
         anchor_count_clean = 0
         avg_offset_clean = 0.0
 
+    # Smoothed drift (median per time bin) + linear trend analysis
+    binned_span, drift_bins = compute_binned_drift(clean)
+    slope, r2, residual_span = linear_fit_delta(clean)
+
     # Decision now based on ROBUST metrics
     decision = decide_quality(
         anchor_count_clean,
         len(ref_cues),
         avg_offset_clean,
+        binned_span,
+        residual_span,
         robust_span,
     )
 
@@ -520,22 +641,28 @@ def main():
         "target_path": tgt_path,
         "ref_count": len(ref_cues),
         "target_count": len(tgt_cues),
+        # Smoothed drift (median per time bin) is the headline metric:
+        "drift_span_sec": round(binned_span, 3),
+        # Diagnostics:
+        "raw_drift_span_sec": metrics["drift_span_sec"],  # raw min-max
+        "robust_drift_span_sec": robust_span,  # 4 * MAD of per-cue deltas
+        "residual_drift_span_sec": round(residual_span, 3),
+        "linear_drift_per_hour": round(slope * 3600.0, 4),
+        "linear_fit_r2": round(r2, 4),
+        "drift_bins": drift_bins,
         # ROBUST versions become the main ones:
         "anchor_count": anchor_count_clean,
         "avg_offset_sec": avg_offset_clean,
         "min_offset_sec": metrics["min_offset_sec"],  # still from raw
         "max_offset_sec": metrics["max_offset_sec"],  # still from raw
-        "drift_span_sec": robust_span,
         # Keep raw for debugging / advanced use if you want later:
         "raw_anchor_count": metrics["anchor_count"],
-        "raw_drift_span_sec": metrics["drift_span_sec"],
         # offsets:
         "offsets": offsets,  # raw anchors
         "clean_offsets": clean,  # robust-cleaned anchors
         "outlier_offsets": outliers,  # spikes we threw out
         "median_offset_sec": median_delta,
         "mad_offset_sec": mad,
-        "robust_drift_span_sec": robust_span,
         "drift_curve": metrics["drift_curve"],
         "decision": decision,
     }

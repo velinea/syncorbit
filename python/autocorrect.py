@@ -7,9 +7,11 @@ import tempfile
 import subprocess
 from statistics import mean, median
 
-PY = "/app/.venv/bin/python3"
+PY = os.environ.get("PYTHON") or "/app/.venv/bin/python3"
+ALIGN_PY = os.environ.get("ALIGN_PY") or "/app/python/align.py"
 TIME_RE = re.compile(r"(?P<h>\d{2}):(?P<m>\d{2}):(?P<s>\d{2}),(?P<ms>\d{3})")
-AUTOCORRECT_DIR = "/app/data/autocorrect"
+DATA_ROOT = os.environ.get("SYNCORBIT_DATA", "/app/data")
+AUTOCORRECT_DIR = os.path.join(DATA_ROOT, "autocorrect")
 
 
 def parse_time(s: str) -> float:
@@ -120,12 +122,11 @@ def detect_piecewise_segments(offsets, max_segments=6):
     abs_devs = [abs(d - global_med) for d in deltas]
     global_mad = median(abs_devs) or 1e-6
 
-    # A probable "jump" if delta changes more than this between neighbors
-    # jump_threshold = max(1.0, 3.0 * global_mad)
-    jump_threshold = max(0.15, 2.0 * global_mad)
+    # A probable "jump" if delta changes more than this between neighbors.
+    # Use 1.5x MAD so clean step changes (|diff| == 2*MAD) are detected.
+    jump_threshold = max(0.15, 1.5 * global_mad)
 
     # Minimum anchors per segment
-    # min_seg_points = max(5, len(pts) // 10)
     min_seg_points = max(4, len(pts) // 20)
     segments_idx = []
     start_idx = 0
@@ -160,12 +161,80 @@ def detect_piecewise_segments(offsets, max_segments=6):
             }
         )
 
-    # Basic sanity: limit segment count, require each is not too noisy
-    segments = segments[:max_segments]
-    # good = [s for s in segments if s["mad"] < 0.8]
-    good = segments
+    # Drop consecutive segments that aren't meaningfully separated — this
+    # prevents a single noisy anchor from being interpreted as a real jump.
+    if len(segments) >= 2:
+        kept = [segments[0]]
+        for cur in segments[1:]:
+            if abs(cur["median_delta"] - kept[-1]["median_delta"]) >= 0.25:
+                kept.append(cur)
+        segments = kept
 
-    return good
+    # Basic sanity: limit segment count
+    segments = segments[:max_segments]
+
+    return segments
+
+
+# ---------------------------------------------------------
+# Binning + linear fit helpers
+# ---------------------------------------------------------
+
+
+def bin_offsets(offsets, n_bins=12):
+    """
+    Return median delta per time bin: [(t_mid, median_delta), ...].
+    Smooths per-cue jitter caused by differing line lengths / cue boundaries.
+    """
+    pts = sorted(
+        [
+            (
+                o.get("ref_t") or o.get("t_ref") or 0.0,
+                o.get("delta") or o.get("offset") or 0.0,
+            )
+            for o in offsets
+        ],
+        key=lambda x: x[0],
+    )
+    if not pts:
+        return []
+    if len(pts) < n_bins:
+        return [(p[0], p[1]) for p in pts]
+
+    k = max(1, len(pts) // n_bins)
+    bins = []
+    for i in range(0, len(pts), k):
+        grp = pts[i : i + k]
+        if not grp:
+            continue
+        bins.append(
+            (median([p[0] for p in grp]), median([p[1] for p in grp]))
+        )
+    return bins
+
+
+def linear_fit(points):
+    """
+    Fit d ~ a * t + b over points [(t, d)].
+    Returns (slope, intercept, r2, residual_span).
+    """
+    if len(points) < 2:
+        return 0.0, 0.0, 0.0, 0.0
+    ts = [p[0] for p in points]
+    ds = [p[1] for p in points]
+
+    t_mean = mean(ts)
+    d_mean = mean(ds)
+    num = sum((t - t_mean) * (d - d_mean) for t, d in zip(ts, ds))
+    den = sum((t - t_mean) ** 2 for t in ts) or 1e-9
+    a = num / den
+    b = d_mean - a * t_mean
+
+    resid = [d - (a * t + b) for t, d in zip(ts, ds)]
+    ss_tot = sum((d - d_mean) ** 2 for d in ds) or 1e-9
+    ss_res = sum(r * r for r in resid)
+    r2 = 1.0 - ss_res / ss_tot
+    return a, b, r2, (max(resid) - min(resid))
 
 
 # ---------------------------------------------------------
@@ -174,21 +243,23 @@ def detect_piecewise_segments(offsets, max_segments=6):
 
 
 def choose_method(syncinfo: dict) -> str:
-    anchors = syncinfo.get("anchor_count") or 0
+    anchors = syncinfo.get("anchor_count") or syncinfo.get("raw_anchor_count") or 0
 
     clean_offsets = syncinfo.get("clean_offsets") or []
     offsets = clean_offsets or (syncinfo.get("offsets") or [])
 
-    if anchors < 20 or not offsets:
+    if anchors < 10 or not offsets:
         return "whisper_required"
 
-    # Prefer robust drift span
-    drift_span = syncinfo.get("robust_drift_span_sec")
+    # Prefer the smoothed (binned) drift metric
+    drift_span = syncinfo.get("drift_span_sec")
+    if drift_span is None:
+        drift_span = syncinfo.get("robust_drift_span_sec")
     if drift_span is None:
         deltas = [o.get("delta") or o.get("offset") or 0.0 for o in offsets]
         drift_span = max(deltas) - min(deltas) if deltas else 0.0
 
-    # 1) Small drift overall → pure global offset
+    # 1) Small smoothed drift overall → pure global offset
     if drift_span < 0.7:
         return "global_offset"
 
@@ -197,31 +268,20 @@ def choose_method(syncinfo: dict) -> str:
     if segments:
         return "piecewise"
 
-    # 3) Try linear drift (stretch+offset) on cleaned offsets
-    if len(offsets) < 5:
-        return "whisper_required"
+    # 3) Strong linear trend → stretch + offset
+    if len(offsets) >= 5:
+        bins = bin_offsets(offsets)
+        a, _b, r2, res_span = linear_fit(bins)
+        if len(bins) >= 3 and r2 > 0.85 and abs(a) < 0.004 and res_span < 1.2:
+            return "stretch_offset"
 
-    ref_ts = [o.get("ref_t") or o.get("t_ref") or 0.0 for o in offsets]
-    time_span = max(ref_ts) - min(ref_ts)
-    if time_span < 600:  # <10 minutes
-        return "whisper_required"
-
-    deltas = [o.get("delta") or o.get("offset") or 0.0 for o in offsets]
-
-    t_mean = mean(ref_ts)
-    d_mean = mean(deltas)
-
-    num = sum((t - t_mean) * (d - d_mean) for t, d in zip(ref_ts, deltas))
-    den = sum((t - t_mean) ** 2 for t in ref_ts) or 1.0
-    a = num / den
-    b = d_mean - a * t_mean
-
-    ss_tot = sum((d - d_mean) ** 2 for d in deltas) or 1.0
-    ss_res = sum((d - (a * t + b)) ** 2 for d, t in zip(deltas, ref_ts))
-    r2 = 1.0 - ss_res / ss_tot
-
-    if r2 > 0.85 and abs(a) < 0.002:
-        return "stretch_offset"
+    # 4) Low per-cue spread → a global offset is still safe
+    mad = syncinfo.get("mad_offset_sec")
+    if mad is None:
+        deltas = [o.get("delta") or o.get("offset") or 0.0 for o in offsets]
+        mad = median([abs(d - median(deltas)) for d in deltas]) if deltas else 0.0
+    if mad <= 0.6:
+        return "global_offset"
 
     return "whisper_required"
 
@@ -266,16 +326,12 @@ def apply_stretch_offset(blocks, syncinfo: dict):
     if len(offsets) < 5:
         raise ValueError("Not enough offsets for stretch correction")
 
-    ref_ts = [o.get("ref_t") or o.get("t_ref") or 0.0 for o in offsets]
-    deltas = [o.get("delta") or o.get("offset") or 0.0 for o in offsets]
+    # Fit on binned medians so individual cue jitter doesn't skew the fit
+    bins = bin_offsets(offsets)
+    if len(bins) < 3:
+        raise ValueError("Not enough bins for stretch correction")
 
-    t_mean = mean(ref_ts)
-    d_mean = mean(deltas)
-
-    num = sum((t - t_mean) * (d - d_mean) for t, d in zip(ref_ts, deltas))
-    den = sum((t - t_mean) ** 2 for t in ref_ts) or 1.0
-    a = num / den
-    b = d_mean - a * t_mean
+    a, b, _r2, _res = linear_fit(bins)
 
     # offset(t) ≈ a * t + b
     # We want corrected T' = T - offset(T)
@@ -355,7 +411,7 @@ def apply_piecewise(blocks, syncinfo: dict):
 def run_align_eval(ref_path: str, target_path: str) -> dict:
     cmd = [
         PY,
-        "/app/python/align.py",
+        ALIGN_PY,
         ref_path,
         target_path,
     ]
@@ -394,10 +450,12 @@ def verdict_from_metrics(before: dict, after: dict, extra: dict) -> dict:
     da = float(after.get("drift_span_sec") or after.get("drift_span") or 0.0)
     ab = int(before.get("anchor_count") or 0)
     aa = int(after.get("anchor_count") or 0)
+    ob = abs(float(before.get("avg_offset_sec") or 0.0))
+    oa = abs(float(after.get("avg_offset_sec") or 0.0))
 
     # Guard against divide by zero
     if db <= 1e-6:
-        # If drift was essentially zero, there's nothing to improve
+        # If drift was essentially zero, there's nothing to improve drift-wise.
         base_verdict = "reject"
         ratio = None
     else:
@@ -408,6 +466,14 @@ def verdict_from_metrics(before: dict, after: dict, extra: dict) -> dict:
             base_verdict = "review"
         else:
             base_verdict = "reject"
+
+    # A big constant offset is a real problem that a global shift fixes well,
+    # even though drift (which is shift-invariant) doesn't change.
+    offset_improved = ob > 1.0 and oa <= 0.5 * ob
+    if offset_improved and base_verdict == "reject":
+        base_verdict = "review"
+    if offset_improved and base_verdict == "review" and da <= 0.6:
+        base_verdict = "accept"
 
     verdict = base_verdict
 
@@ -427,6 +493,8 @@ def verdict_from_metrics(before: dict, after: dict, extra: dict) -> dict:
             "drift_after": da,
             "anchors_before": ab,
             "anchors_after": aa,
+            "offset_before": ob,
+            "offset_after": oa,
             "max_shift_sec": max_shift,
         },
     }
