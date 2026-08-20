@@ -21,7 +21,7 @@ export function smoothOffsets(offsets, windowSize = 3) {
   return smoothed;
 }
 
-export function drawGraph(canvas, anchors) {
+export function drawGraph(canvas, anchors, driftBins) {
   const ctx = canvas.getContext('2d');
   const W = (canvas.width = canvas.clientWidth);
   const H = (canvas.height = canvas.clientHeight);
@@ -67,6 +67,32 @@ export function drawGraph(canvas, anchors) {
     ctx.arc(x, y, 2, 0, Math.PI * 2);
     ctx.fill();
   });
+
+  // Draw binned-median drift curve overlay (if provided)
+  if (driftBins && driftBins.length >= 2) {
+    const bxs = driftBins.map(b => b.ref_t ?? b.t ?? 0);
+    const bys = driftBins.map(b => b.delta ?? b.offset ?? 0);
+
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    bxs.forEach((t, i) => {
+      const x = toCanvasX(t);
+      const y = toCanvasY(bys[i]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = '#fbbf24';
+    bxs.forEach((t, i) => {
+      const x = toCanvasX(t);
+      const y = toCanvasY(bys[i]);
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
 
   // Tooltip
   const tip = document.createElement('div');

@@ -140,16 +140,72 @@ function renderSummary(d, targetEl = manualSummaryPre) {
   const max = Number(d.max_offset_sec ?? d.max_offset ?? 0);
   const decision = d.decision ?? 'unknown';
 
+  const refCount = d.ref_count ?? '-';
+  const anchorRatio =
+    typeof d.anchor_ratio === 'number'
+      ? d.anchor_ratio
+      : refCount !== '-' && refCount > 0
+        ? anchors / refCount
+        : 0;
+
+  const residual =
+    d.residual_span != null
+      ? Number(d.residual_span).toFixed(3)
+      : d.residual_drift_span_sec != null
+        ? Number(d.residual_drift_span_sec).toFixed(3)
+        : d.raw && d.raw.residual_drift_span_sec != null
+          ? Number(d.raw.residual_drift_span_sec).toFixed(3)
+          : '-';
+
+  const robust =
+    d.robust_span != null
+      ? Number(d.robust_span).toFixed(3)
+      : d.robust_drift_span_sec != null
+        ? Number(d.robust_drift_span_sec).toFixed(3)
+        : d.raw && d.raw.robust_drift_span_sec != null
+          ? Number(d.raw.robust_drift_span_sec).toFixed(3)
+          : '-';
+
+  const rawSpan =
+    d.raw_span != null
+      ? Number(d.raw_span).toFixed(3)
+      : d.raw_drift_span_sec != null
+        ? Number(d.raw_drift_span_sec).toFixed(3)
+        : d.raw && d.raw.raw_drift_span_sec != null
+          ? Number(d.raw.raw_drift_span_sec).toFixed(3)
+          : '-';
+
+  const driftPerHr =
+    d.linear_drift_per_hour != null
+      ? Number(d.linear_drift_per_hour).toFixed(4)
+      : d.raw && d.raw.linear_drift_per_hour != null
+        ? Number(d.raw.linear_drift_per_hour).toFixed(4)
+        : '-';
+
+  const r2 =
+    d.linear_fit_r2 != null
+      ? Number(d.linear_fit_r2).toFixed(4)
+      : d.raw && d.raw.linear_fit_r2 != null
+        ? Number(d.raw.linear_fit_r2).toFixed(4)
+        : '-';
+
+  const reason = d.reason || '';
+
   targetEl.textContent =
     `Ref:        ${d.reference_path || d.ref_path || ''}\n` +
     `Target:     ${d.target_path || d.target || ''}\n\n` +
-    `Ref lines:  ${d.ref_count ?? '-'}\n` +
+    `Ref lines:  ${refCount}\n` +
     `Tgt lines:  ${d.target_count ?? '-'}\n` +
-    `Anchors:    ${anchors}\n` +
+    `Anchors:    ${anchors}  (${(anchorRatio * 100).toFixed(2)}% of ref)\n` +
     `Avg offset: ${avg.toFixed(3)} s\n` +
-    `Drift span: ${span.toFixed(3)} s\n` +
     `Min / Max:  ${min.toFixed(3)} s  /  ${max.toFixed(3)} s\n` +
-    `Decision:   ${decision}`;
+    `Drift span: ${span.toFixed(3)} s   (binned)\n` +
+    `Residual:   ${residual} s   (after linear fit)\n` +
+    `Robust:     ${robust} s   (4×MAD)\n` +
+    `Raw span:   ${rawSpan} s   (min–max)\n` +
+    `Linear:     ${driftPerHr} s/h   r²=${r2}\n` +
+    `Decision:   ${decision}\n` +
+    (reason ? `Why:        ${reason}` : '');
 }
 
 function setSummaryBackdrop(el, movieName) {
@@ -318,7 +374,7 @@ if (alignBtn) {
           ? data.clean_offsets
           : data.offsets || [];
 
-      drawGraph(manualCanvas, baseOffsets);
+      drawGraph(manualCanvas, baseOffsets, data.drift_bins || []);
     } catch (e) {
       manualSummaryPre.textContent = 'Align failed: ' + e.message;
       clearManualGraph();
@@ -717,7 +773,11 @@ async function openLibraryAnalysis(row) {
       // Render summary + graph
       currentLibraryAnalysis = json.data;
       renderSummary(json.data, librarySummaryPre);
-      drawGraph(libraryCanvas, json.data.clean_offsets || json.data.offsets || []);
+      drawGraph(
+        libraryCanvas,
+        json.data.clean_offsets || json.data.offsets || [],
+        json.data.raw?.drift_bins || []
+      );
     }
 
     // ----------------------------------------------------------

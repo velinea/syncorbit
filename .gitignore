@@ -7,3 +7,5 @@ pyproject.toml
 .eslintrc.cjs
 data
 .env
+__pycache__/
+*.pyc

@@ -10,6 +10,43 @@ const { db, initDb } = require('./db.cjs');
 initDb();
 
 const app = express();
+
+// Mirror decide_quality() gate order (align.py) to explain a decision.
+function decisionReason(raw) {
+  const anchorCount = raw.anchor_count ?? raw.raw_anchor_count ?? 0;
+  const refCount = raw.ref_count ?? 0;
+  const avgOffset =
+    raw.median_offset_sec ?? raw.avg_offset_sec ?? 0;
+  const driftSpan =
+    raw.drift_span_sec ?? raw.robust_drift_span_sec ?? 0;
+  const residualSpan = raw.residual_drift_span_sec ?? 0;
+  const anchorSpread =
+    raw.robust_drift_span_sec ?? raw.drift_span_sec ?? 0;
+  const anchorRatio = refCount > 0 ? anchorCount / refCount : 0;
+
+  if (anchorRatio < 0.03) {
+    return `Too few anchors (${anchorCount}/${refCount} = ${(anchorRatio * 100).toFixed(2)}% < 3%)`;
+  }
+  if (driftSpan > 3.5) {
+    return `Drift span ${driftSpan.toFixed(2)}s > 3.5s — subtitles drift progressively`;
+  }
+  if (residualSpan > 2.5) {
+    return `Residual after linear drift ${residualSpan.toFixed(2)}s > 2.5s — non-linear drift`;
+  }
+  if (Math.abs(avgOffset) > 4.0) {
+    return `Offset ${avgOffset.toFixed(2)}s (|offset| > 4s) — off by a large constant`;
+  }
+  if (
+    anchorRatio >= 0.06 &&
+    driftSpan <= 1.5 &&
+    Math.abs(avgOffset) <= 1.5 &&
+    anchorSpread <= 2.5
+  ) {
+    return `Clean anchors: ${anchorCount}/${refCount}, drift ${driftSpan.toFixed(2)}s, offset ${avgOffset.toFixed(2)}s`;
+  }
+  return 'Borderline — within gates but metrics are not clean enough for synced';
+}
+
 const PY = '/app/.venv/bin/python3';
 const MEDIA_ROOT = '/app/media';
 const DATA_ROOT = '/app/data';
@@ -436,6 +473,7 @@ app.post('/api/align', (req, res) => {
     if (code === 0) {
       try {
         const data = JSON.parse(out);
+        data.reason = decisionReason(data);
         res.json(data);
       } catch (e) {
         res.status(500).json({
@@ -731,6 +769,17 @@ app.get('/api/analysis/:movie', (req, res) => {
 
     const raw = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
 
+    const anchorCount = raw.anchor_count ?? raw.raw_anchor_count ?? 0;
+    const refCount = raw.ref_count ?? 0;
+    const avgOffset =
+      raw.median_offset_sec ?? raw.avg_offset_sec ?? 0;
+    const driftSpan =
+      raw.drift_span_sec ?? raw.robust_drift_span_sec ?? 0;
+    const residualSpan = raw.residual_drift_span_sec ?? 0;
+    const robustSpan = raw.robust_drift_span_sec ?? 0;
+    const rawSpan = raw.raw_drift_span_sec ?? 0;
+    const anchorRatio = refCount > 0 ? anchorCount / refCount : 0;
+
     const normalized = {
       movie,
 
@@ -741,15 +790,25 @@ app.get('/api/analysis/:movie', (req, res) => {
       target_path: raw.target_path ?? raw.target ?? null,
 
       // Canonical counts
-      anchor_count: raw.anchor_count ?? raw.raw_anchor_count,
-      ref_count: raw.ref_count,
+      anchor_count: anchorCount,
+      ref_count: refCount,
       target_count: raw.target_count,
 
       // Canonical offsets (seconds)
-      avg_offset: raw.median_offset_sec ?? raw.avg_offset_sec,
+      avg_offset: avgOffset,
       max_offset: raw.max_offset_sec,
       min_offset: raw.min_offset_sec,
-      drift_span: raw.drift_span_sec ?? raw.robust_drift_span_sec,
+      drift_span: driftSpan,
+
+      // New diagnostics (why a decision was made)
+      anchor_ratio: anchorRatio,
+      residual_span: residualSpan,
+      robust_span: robustSpan,
+      raw_span: rawSpan,
+      linear_drift_per_hour: raw.linear_drift_per_hour ?? null,
+      linear_fit_r2: raw.linear_fit_r2 ?? null,
+      drift_bins: raw.drift_bins ?? [],
+      reason: decisionReason(raw),
 
       // Graph data
       offsets: raw.clean_offsets ?? raw.offsets,
