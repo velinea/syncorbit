@@ -9,6 +9,7 @@ from statistics import mean, median
 
 PY = os.environ.get("PYTHON") or "/app/.venv/bin/python3"
 ALIGN_PY = os.environ.get("ALIGN_PY") or "/app/python/align.py"
+RETIME_PY = os.environ.get("RETIME_PY") or "/app/python/retime.py"
 TIME_RE = re.compile(r"(?P<h>\d{2}):(?P<m>\d{2}):(?P<s>\d{2}),(?P<ms>\d{3})")
 DATA_ROOT = os.environ.get("SYNCORBIT_DATA", "/app/data")
 AUTOCORRECT_DIR = os.path.join(DATA_ROOT, "autocorrect")
@@ -259,23 +260,31 @@ def choose_method(syncinfo: dict) -> str:
         deltas = [o.get("delta") or o.get("offset") or 0.0 for o in offsets]
         drift_span = max(deltas) - min(deltas) if deltas else 0.0
 
-    # 1) Small smoothed drift overall → pure global offset
-    if drift_span < 0.7:
+    residual_span = syncinfo.get("residual_drift_span_sec") or 0.0
+
+    # 1) Low drift AND low residual → a simple global offset is safest (no
+    #    risk of overfitting wiggles into an already-fine subtitle).
+    if drift_span < 0.7 and residual_span <= 2.5:
         return "global_offset"
 
-    # 2) Check for piecewise segments
+    # 2) Enough clean anchors → piecewise-linear warp (handles smooth non-linear
+    #    drift, high residual, AND step-jumps; subsumes the older models).
+    if len(offsets) >= 20:
+        return "piecewise_linear_warp"
+
+    # 3) Check for piecewise segments (lower-anchor fallback)
     segments = detect_piecewise_segments(offsets)
     if segments:
         return "piecewise"
 
-    # 3) Strong linear trend → stretch + offset
+    # 4) Strong linear trend → stretch + offset
     if len(offsets) >= 5:
         bins = bin_offsets(offsets)
         a, _b, r2, res_span = linear_fit(bins)
         if len(bins) >= 3 and r2 > 0.85 and abs(a) < 0.004 and res_span < 1.2:
             return "stretch_offset"
 
-    # 4) Low per-cue spread → a global offset is still safe
+    # 5) Low per-cue spread → a global offset is still safe
     mad = syncinfo.get("mad_offset_sec")
     if mad is None:
         deltas = [o.get("delta") or o.get("offset") or 0.0 for o in offsets]
@@ -408,6 +417,83 @@ def apply_piecewise(blocks, syncinfo: dict):
     return out, meta
 
 
+def apply_piecewise_linear_warp(blocks, syncinfo: dict):
+    """
+    Non-linear time correction: build a piecewise-linear mapping from the
+    clean anchors (target_t -> delta) and subtract the interpolated delta
+    from each cue. Handles smooth non-linear drift that global offset,
+    stretch, and piecewise-step methods all miss. Preserves cue structure,
+    text, and line breaks — only timing shifts.
+    """
+    offsets = syncinfo.get("clean_offsets") or syncinfo.get("offsets") or []
+    if len(offsets) < 20:
+        raise ValueError("Not enough offsets for piecewise-linear warp")
+
+    import bisect
+
+    pts = []
+    for o in offsets:
+        tt = o.get("target_t")
+        rt = o.get("ref_t")
+        if tt is None or rt is None:
+            continue
+        d = o.get("delta")
+        if d is None:
+            d = o.get("offset")
+        if d is None:
+            d = tt - rt
+        pts.append((float(tt), float(d)))
+    pts.sort(key=lambda p: p[0])
+
+    # Enforce monotonic target_t so interpolation is a proper function.
+    mono = []
+    last_t = -1e18
+    for t, d in pts:
+        if t > last_t:
+            mono.append((t, d))
+            last_t = t
+    if len(mono) < 20:
+        raise ValueError("Too few monotonic anchors for warp")
+
+    xs = [p[0] for p in mono]
+    ds = [p[1] for p in mono]
+
+    def interp_delta(t: float) -> float:
+        if t <= xs[0]:
+            return ds[0]
+        if t >= xs[-1]:
+            return ds[-1]
+        k = bisect.bisect_left(xs, t)
+        x0, x1 = xs[k - 1], xs[k]
+        d0, d1 = ds[k - 1], ds[k]
+        if x1 == x0:
+            return d0
+        return d0 + (d1 - d0) * (t - x0) / (x1 - x0)
+
+    min_dur = 0.1
+    out = []
+    max_shift = 0.0
+    for b in blocks:
+        s = b["start"]
+        e = b["end"]
+        ns = s - interp_delta(s)
+        ne = e - interp_delta(e)
+        if ne < ns + min_dur:
+            ne = ns + min_dur
+        if ns < 0:
+            ns = 0.0
+            ne = max(ne, min_dur)
+        out.append({"start": ns, "end": ne, "lines": b["lines"]})
+        max_shift = max(max_shift, abs(ns - s), abs(ne - e))
+
+    meta = {
+        "method": "piecewise_linear_warp",
+        "anchor_count": len(mono),
+        "max_shift_sec": max_shift,
+    }
+    return out, meta
+
+
 def run_align_eval(ref_path: str, target_path: str) -> dict:
     cmd = [
         PY,
@@ -501,6 +587,99 @@ def verdict_from_metrics(before: dict, after: dict, extra: dict) -> dict:
 
 
 # ---------------------------------------------------------
+# Re-time fallback
+# ---------------------------------------------------------
+
+
+def find_en_subtitle(target_srt: str):
+    """Find the English subtitle alongside the target in the same directory."""
+    d = os.path.dirname(target_srt)
+    if not d or not os.path.isdir(d):
+        return None
+    base = os.path.basename(target_srt)
+    en_name = re.sub(r"\.fi\.srt$", ".en.srt", base, flags=re.IGNORECASE)
+    if en_name != base:
+        en_path = os.path.join(d, en_name)
+        if os.path.exists(en_path):
+            return en_path
+    for f in sorted(os.listdir(d)):
+        if f.lower().endswith(".en.srt"):
+            return os.path.join(d, f)
+    return None
+
+
+def try_retime(target_srt: str, syncinfo: dict, out_dir: str):
+    """
+    Fallback when timing correction is rejected: re-time the target text onto
+    the English subtitle's timecodes via retime.py. Returns a result dict (with
+    status 'ok' or 'error') or None when no English subtitle is available.
+    """
+    en_path = find_en_subtitle(target_srt)
+    if not en_path:
+        return None
+
+    os.makedirs(out_dir, exist_ok=True)
+    base = os.path.basename(target_srt)
+    name, ext = os.path.splitext(base)
+    out_srt = os.path.join(out_dir, f"{name}.retimed{ext}")
+    issues_path = out_srt + ".issues.json"
+
+    p = subprocess.run(
+        [PY, RETIME_PY, en_path, target_srt, out_srt, issues_path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if p.returncode != 0:
+        return {
+            "status": "error",
+            "error": "retime_failed",
+            "detail": (p.stderr or p.stdout or "")[-400:],
+        }
+
+    lines = [l for l in p.stdout.strip().splitlines() if l.startswith("{")]
+    retime_info = json.loads(lines[-1]) if lines else {}
+
+    if not os.path.exists(out_srt):
+        return {"status": "whisper_required", "method": "retime", "output_file": None}
+
+    after_sync = run_align_eval(en_path, out_srt)
+    before = {
+        "anchor_count": int(syncinfo.get("anchor_count") or 0),
+        "drift_span_sec": float(syncinfo.get("drift_span_sec") or 0.0),
+        "avg_offset_sec": float(syncinfo.get("avg_offset_sec") or 0.0),
+    }
+    after = {
+        "anchor_count": int(after_sync.get("anchor_count") or 0),
+        "drift_span_sec": float(after_sync.get("drift_span_sec") or 0.0),
+        "avg_offset_sec": float(after_sync.get("avg_offset_sec") or 0.0),
+    }
+    extra = {"max_shift_sec": 0.0}
+    verdict_info = verdict_from_metrics(before, after, extra)
+
+    result = {
+        "status": "ok",
+        "method": "retime",
+        "output_file": os.path.basename(out_srt),
+        "before": before,
+        "after": after,
+        "retime": {
+            "verdict": retime_info.get("verdict"),
+            "out_cues": retime_info.get("out_cues"),
+            "split_words": retime_info.get("split_words"),
+            "split_failed": retime_info.get("split_failed"),
+            "orphan_fi": retime_info.get("orphan_fi"),
+            "signs": retime_info.get("signs"),
+            "omissions": retime_info.get("omissions"),
+            "issue_count": retime_info.get("issue_count"),
+        },
+        "notes": ["re-time fallback applied"],
+    }
+    result.update(verdict_info)
+    return result
+
+
+# ---------------------------------------------------------
 # CLI
 # ---------------------------------------------------------
 
@@ -551,6 +730,12 @@ def main():
     method = choose_method(syncinfo)
 
     if method == "whisper_required":
+        # Re-time fallback: if an English subtitle is available, re-time the
+        # target text onto its timecodes rather than giving up.
+        rt = try_retime(target_srt, syncinfo, AUTOCORRECT_DIR)
+        if rt is not None:
+            print(json.dumps(rt), flush=True)
+            sys.exit(0)
         print(
             json.dumps(
                 {
@@ -570,6 +755,8 @@ def main():
             new_blocks, meta = apply_stretch_offset(blocks, syncinfo)
         elif method == "piecewise":
             new_blocks, meta = apply_piecewise(blocks, syncinfo)
+        elif method == "piecewise_linear_warp":
+            new_blocks, meta = apply_piecewise_linear_warp(blocks, syncinfo)
         else:
             print(
                 json.dumps(
@@ -648,6 +835,17 @@ def main():
         }
 
         result.update(verdict_info)
+
+        # Re-time fallback when the warp is rejected (didn't reduce drift
+        # enough). Try re-timing onto the English timecodes instead.
+        if (
+            verdict_info["verdict"] == "reject"
+            and method == "piecewise_linear_warp"
+        ):
+            rt = try_retime(target_srt, syncinfo, AUTOCORRECT_DIR)
+            if rt is not None:
+                print(json.dumps(rt), flush=True)
+                sys.exit(0)
 
         print(json.dumps(result))
 
