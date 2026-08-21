@@ -38,19 +38,37 @@ Reads the stored `analysis.syncinfo` for one movie.
         "movie": "10 Cloverfield Lane (2016)",
         "decision": "synced",
         "anchor_count": 563,
+        "ref_count": 1033,
         "avg_offset": -0.087,
         "drift_span": 0.052,
         "best_reference": "en",
         "reference_path": "/app/media/…en.srt",
         "target_path": "/app/media/…fi.srt",
+        "anchor_ratio": 0.545,
+        "residual_span": 1.234,
+        "robust_span": 0.410,
+        "raw_span": 8.193,
+        "linear_drift_per_hour": 0.0021,
+        "linear_fit_r2": 0.31,
+        "drift_bins": [ { "ref_t": 190.7, "delta": -0.37 }, … ],
+        "reason": "Clean anchors: 563/1033, drift 0.05s, offset -0.09s",
         "offsets": [ ... ]
       }
     }
 
+- `drift_span` is the smoothed (median-per-time-bin) drift in seconds
+- `residual_span` is what remains after removing a fitted linear drift —
+  large values indicate non-linear drift
+- `reason` mirrors the `decide_quality()` gate order in `align.py` and is the
+  plain-language explanation shown in the UI (`Why:` line)
+- `offsets` are the clean (MAD-filtered) anchors used by the graph
+- the full unmodified analysis is also available under `data.raw`
+
 ## /api/align
 
 POST `{ "reference": "/path/en.srt", "target": "/path/fi.srt" }`.
-Runs `align.py` and returns the full analysis JSON (see `python/align.py`).
+Runs `align.py` and returns the full analysis JSON (see `python/align.py`),
+plus a computed `reason` field (same logic as `/api/analysis/:movie`).
 
 ## /api/autocorrect
 
@@ -74,3 +92,11 @@ Each returns `{ ok, results, errors }`.
 - POST `/api/run-batch-scan` → start a full library scan
 - POST `/api/reanalyze/:movie` → re-align one movie against its newest reference
 - GET `/api/searchsubs?q=…` → subtitle search
+
+### Legacy (not used by the current UI)
+
+- GET `/api/movieinfo?file=…` → raw `analysis.syncinfo` by absolute path
+- GET `/api/movies` → movie folders found under `MEDIA_ROOT`
+- POST `/api/analyze` → run `analyze.py` on a single subtitle file
+- POST `/api/compare` → run `analyze_pair.py` on two subtitles
+- POST `/api/whisper/:movie` → submit a WhisperX job for one movie

@@ -17,7 +17,7 @@ It combines automated alignment, speech-based references, and human-in-the-loop 
   - FFSubSync-aligned references
 - Scores and classifies results (synced / needs adjustment / bad)
 - Lets you reanalyze individual movies or run batch jobs
-- Lets yus autocorrect individual movies based on previous analysis
+- Lets you autocorrect individual movies based on previous analysis
 - Keeps state in a database (not fragile CSV glue)
 - Designed for large libraries (thousands of movies)
 
@@ -124,13 +124,13 @@ Each movie ends up with:
 
   - synced
   - needs_adjustment
-  - bad
+  - whisper_required
 
 - best_reference
 
   - en
   - whisper
-  - ffsubsync
+  - ffsync
 
 - reference_path
 - alignment statistics (anchors, drift, offsets)
@@ -150,6 +150,8 @@ The newest valid reference wins — unless manually overridden.
   - Run FFSubSync
   - Touch / create Whisper references
 - Analysis graphs and statistics per movie
+- Every decision comes with a plain-language `Why:` explanation
+  (see [docs/ui.md](docs/ui.md))
 
 ## Batch Workflow
 
@@ -204,7 +206,8 @@ Here is my real, day-to-day workflow.
 
    Instead, I look at:
 
-   - decision (synced, needs_adjustment, bad)
+   - decision (synced, needs_adjustment, whisper_required)
+   - the `Why:` explanation under it
    - anchor count
    - drift span
    - reference badge (EN / Whisper / FFSubSync)
@@ -343,10 +346,6 @@ Unraid runs the same image it builds, so there is no reason to build elsewhere.
 You can either manage the container through the Unraid Docker UI (point the
 template at the locally built `syncorbit:latest` image) or use Unraid's
 Compose Manager. The included `docker-compose.yml` supports both.
-
-## Optional: WhisperX Integration
-
-- Run WhisperX as a separate container
 
 ## Optional: WhisperX Integration
 
