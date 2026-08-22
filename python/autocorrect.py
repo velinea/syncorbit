@@ -684,25 +684,38 @@ def try_retime(target_srt: str, syncinfo: dict, out_dir: str):
 # ---------------------------------------------------------
 
 
-def main():
-    if len(sys.argv) < 3:
-        print(
-            "Usage: autocorrect.py TARGET_SRT ANALYSIS_SYNCINFO [OUT_SRT]",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+FORCED_METHODS = {"global_offset", "stretch_offset", "piecewise",
+                  "piecewise_linear_warp", "retime"}
 
-    target_srt = sys.argv[1]
-    syncinfo_path = sys.argv[2]
+
+def main():
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        description="Auto-correct subtitle timing"
+    )
+    ap.add_argument("target", help="target SRT to correct")
+    ap.add_argument("syncinfo", help="analysis.syncinfo JSON path")
+    ap.add_argument("out_srt", nargs="?", help="output SRT (default: autocorrect dir)")
+    ap.add_argument("--method", default="auto",
+                    help="auto (default) | global_offset | stretch_offset | "
+                         "piecewise | piecewise_linear_warp | retime")
+    args = ap.parse_args()
+
+    target_srt = args.target
+    syncinfo_path = args.syncinfo
+    forced = args.method if args.method != "auto" else None
+    if forced and forced not in FORCED_METHODS:
+        print(json.dumps({"status": "error",
+                          "error": f"unknown method: {forced}"}), flush=True)
+        sys.exit(1)
 
     # Ensure output directory exists
     os.makedirs(AUTOCORRECT_DIR, exist_ok=True)
 
-    if len(sys.argv) >= 4:
-        # Explicit output path (caller knows what they’re doing)
-        out_srt = sys.argv[3]
+    if args.out_srt:
+        out_srt = args.out_srt
     else:
-        # Default: write to autocorrect dir, never to media
         base_name = os.path.basename(target_srt)
         name, ext = os.path.splitext(base_name)
         out_srt = os.path.join(
@@ -727,7 +740,18 @@ def main():
         sys.exit(0)
 
     blocks = read_srt(target_srt)
-    method = choose_method(syncinfo)
+
+    # --- forced re-time: skip method selection entirely ---
+    if forced == "retime":
+        rt = try_retime(target_srt, syncinfo, AUTOCORRECT_DIR)
+        if rt is not None:
+            print(json.dumps(rt), flush=True)
+            sys.exit(0)
+        print(json.dumps({"status": "whisper_required",
+                          "method": "retime", "output_file": None}), flush=True)
+        sys.exit(0)
+
+    method = forced if forced else choose_method(syncinfo)
 
     if method == "whisper_required":
         # Re-time fallback: if an English subtitle is available, re-time the
@@ -837,10 +861,12 @@ def main():
         result.update(verdict_info)
 
         # Re-time fallback when the warp is rejected (didn't reduce drift
-        # enough). Try re-timing onto the English timecodes instead.
+        # enough). Only in auto mode — when the user forced a method, respect
+        # their choice and report the result as-is.
         if (
             verdict_info["verdict"] == "reject"
             and method == "piecewise_linear_warp"
+            and not forced
         ):
             rt = try_retime(target_srt, syncinfo, AUTOCORRECT_DIR)
             if rt is not None:

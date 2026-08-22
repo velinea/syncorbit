@@ -456,11 +456,13 @@ async function onAutoCorrectClick() {
   autoCorrectResult.textContent = 'Running auto-correction…';
   showSpinner();
 
+  const method = document.getElementById('autoCorrectMethod')?.value || 'auto';
+
   try {
     const res = await fetch('/api/autocorrect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target, syncinfo_path: syncinfoPath }),
+      body: JSON.stringify({ target, syncinfo_path: syncinfoPath, method }),
     });
 
     const data = await res.json();

@@ -131,7 +131,15 @@
                 (select a movie row to view its analysis.syncinfo)</pre
               >
 
-              <button id="autoCorrectBtn" disabled>Auto-correct subtitles</button>
+              <div id="autoCorrectControls" style="display:flex; gap:6px; align-items:center;">
+                <select id="autoCorrectMethod" title="Correction method">
+                  <option value="auto" selected>Auto</option>
+                  <option value="global_offset">Global offset</option>
+                  <option value="piecewise_linear_warp">Linear warp</option>
+                  <option value="retime">Re-time to EN</option>
+                </select>
+                <button id="autoCorrectBtn" disabled>Auto-correct</button>
+              </div>
               <div id="autoCorrectResult" class="note" style="margin-top: 6px"></div>
               <canvas id="libraryGraph"></canvas>
             </div>

@@ -862,13 +862,15 @@ app.get('/api/movies', (req, res) => {
 });
 
 app.post('/api/autocorrect', (req, res) => {
-  const { target, syncinfo_path } = req.body;
+  const { target, syncinfo_path, method } = req.body;
 
   if (!target || !syncinfo_path) {
     return res.status(400).json({ error: 'target and syncinfo_path required' });
   }
 
-  const py = spawn(PY, ['/app/python/autocorrect.py', target, syncinfo_path]);
+  const args = ['/app/python/autocorrect.py', target, syncinfo_path];
+  if (method && method !== 'auto') args.push('--method', method);
+  const py = spawn(PY, args);
 
   let out = '';
   let errBuf = '';
