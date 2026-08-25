@@ -908,6 +908,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   const endpoint = {
     touch_whisper: '/api/bulk/touch_whisper',
     ignore: '/api/bulk/ignore',
+    unignore: '/api/bulk/unignore',
     ffsubsync: '/api/bulk/ffsubsync',
   }[action.value];
 

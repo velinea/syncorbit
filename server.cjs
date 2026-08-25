@@ -209,6 +209,23 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
   res.json({ ok: true, total: ignoreList.length });
 });
 
+app.post('/api/bulk/unignore', express.json(), async (req, res) => {
+  const movies = req.body.movies || [];
+  const set = new Set(movies);
+  const ignoreList = loadIgnoreList().filter(m => !set.has(m));
+  saveIgnoreList(ignoreList);
+
+  let updated = 0;
+  if (movies.length) {
+    const placeholders = movies.map(() => '?').join(',');
+    updated = db.prepare(
+      `UPDATE movies SET ignored = 0, state = 'ok' WHERE movie IN (${placeholders})`
+    ).run(...movies).changes;
+  }
+
+  res.json({ ok: true, total: ignoreList.length, updated });
+});
+
 app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
   const movies = req.body.movies || [];
   const results = [];
