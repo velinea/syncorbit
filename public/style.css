@@ -348,6 +348,12 @@ button:disabled {
   color: #e5e7eb;
   font-size: 14px;
 }
+
+/* Autocorrect controls share the library-controls row layout, but the
+   method dropdown needs more width than the short library filters. */
+#autoCorrectMethod {
+  max-width: none;
+}
 .bulk-btn {
   margin: 10px 0;
   padding: 6px 12px;
@@ -550,8 +556,10 @@ thead th {
   border: 1px solid #334155;
   z-index: 1000;
 }
-#autoCorrectBtn {
+#autoCorrectControls {
   margin-top: 8px;
+}
+#autoCorrectBtn {
   padding: 6px 12px;
   font-size: 13px;
 }
