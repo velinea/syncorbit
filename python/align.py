@@ -30,7 +30,7 @@ Outputs JSON to stdout with fields:
         { "ref_t": float, "delta": float },
         ...
       ],
-      "decision": "synced" | "needs_adjustment" | "whisper_required"
+      "decision": "synced" | "needs_adjustment" | "unresolvable"
     }
     """
 
@@ -500,35 +500,37 @@ def decide_quality(
 ) -> str:
     """
     Decision logic for SyncOrbit:
-      - 'synced': good anchors, low smoothed drift, small offset
-      - 'whisper_required': few anchors or large drift/offset
-      - 'needs_adjustment': somewhere in between
+      - 'synced': good anchors, low smoothed drift, small offset, low scatter
+      - 'unresolvable': cannot be aligned against the current reference with
+        any available method (too few anchors, real progressive drift, or a
+        huge constant offset)
+      - 'needs_adjustment': aligns, but a correctable offset/drift/scatter
+        exists — autocorrect's piecewise warp handles exactly this
     """
     ref_count_safe = ref_count if ref_count > 0 else 1
     anchor_ratio = anchor_count / ref_count_safe  # fraction of matched lines
 
     # <3% anchors → too weak to trust
     if anchor_ratio < 0.03:
-        return "whisper_required"
+        return "unresolvable"
 
-    # Smoothed drift too large → genuinely drifting, need a reference
+    # Smoothed drift too large → genuinely progressive drift
     if drift_span > 3.5:
-        return "whisper_required"
-
-    # Residual after removing linear drift still large → non-linear drift
-    if residual_span > 2.5:
-        return "whisper_required"
+        return "unresolvable"
 
     if abs(avg_offset) > 4.0:
-        return "whisper_required"
+        return "unresolvable"
 
     # Per-cue spread sanity: small smoothed drift but huge anchor spread means
-    # cue boundaries are chaotic, not cleanly synced.
+    # cue boundaries are chaotic, not cleanly synced. Residual scatter above
+    # 2.5 s also disqualifies 'synced', but stays correctable — the piecewise
+    # warp absorbs offset segments and scatter alike.
     if (
         anchor_ratio >= 0.06
         and drift_span <= 1.5
         and abs(avg_offset) <= 1.5
         and anchor_spread <= 2.5
+        and residual_span <= 2.5
     ):
         return "synced"
 

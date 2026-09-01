@@ -24,7 +24,7 @@ Reads the movies table from SQLite (canonical state).
       ]
     }
 
-- `decision` is one of: `synced`, `needs_adjustment`, `whisper_required`
+- `decision` is one of: `synced`, `needs_adjustment`, `unresolvable`
 - `state` is one of: `ok`, `missing_subtitles`, `ignored`
 - `drift_span` is the smoothed (median-per-time-bin) drift in seconds
 

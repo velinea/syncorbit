@@ -25,13 +25,10 @@ function decisionReason(raw) {
   const anchorRatio = refCount > 0 ? anchorCount / refCount : 0;
 
   if (anchorRatio < 0.03) {
-    return `Too few anchors (${anchorCount}/${refCount} = ${(anchorRatio * 100).toFixed(2)}% < 3%)`;
+    return `Too few anchors (${anchorCount}/${refCount} = ${(anchorRatio * 100).toFixed(2)}% < 3%) — unresolvable with this reference`;
   }
   if (driftSpan > 3.5) {
     return `Drift span ${driftSpan.toFixed(2)}s > 3.5s — subtitles drift progressively`;
-  }
-  if (residualSpan > 2.5) {
-    return `Residual after linear drift ${residualSpan.toFixed(2)}s > 2.5s — non-linear drift`;
   }
   if (Math.abs(avgOffset) > 4.0) {
     return `Offset ${avgOffset.toFixed(2)}s (|offset| > 4s) — off by a large constant`;
@@ -40,9 +37,13 @@ function decisionReason(raw) {
     anchorRatio >= 0.06 &&
     driftSpan <= 1.5 &&
     Math.abs(avgOffset) <= 1.5 &&
-    anchorSpread <= 2.5
+    anchorSpread <= 2.5 &&
+    residualSpan <= 2.5
   ) {
     return `Clean anchors: ${anchorCount}/${refCount}, drift ${driftSpan.toFixed(2)}s, offset ${avgOffset.toFixed(2)}s`;
+  }
+  if (residualSpan > 2.5) {
+    return `Scatter/offset segments (residual ${residualSpan.toFixed(2)}s > 2.5s) — correctable with auto-correct`;
   }
   return 'Borderline — within gates but metrics are not clean enough for synced';
 }
@@ -760,6 +761,8 @@ app.get('/api/library', (req, res) => {
         has_whisper: !!r.has_whisper,
         has_ffsubsync: !!r.has_ffsubsync,
         ignored: !!r.ignored,
+        // normalize legacy decision value (pre-rename rows)
+        decision: r.decision === 'whisper_required' ? 'unresolvable' : r.decision,
       }));
 
     res.json({ ok: true, rows });
@@ -801,7 +804,8 @@ app.get('/api/analysis/:movie', (req, res) => {
       movie,
 
       syncinfo_path: syncinfoPath,
-      decision: raw.decision,
+      // normalize legacy decision value (pre-rename syncinfo files)
+      decision: raw.decision === 'whisper_required' ? 'unresolvable' : raw.decision,
       best_reference: raw.best_reference,
       reference_path: raw.reference_path ?? raw.ref_path ?? null,
       target_path: raw.target_path ?? raw.target ?? null,
@@ -1055,7 +1059,10 @@ app.get('/api/db/stats', (req, res) => {
 
     const decisions = {};
     for (const r of byDecision) {
-      decisions[r.decision || 'unknown'] = r.n;
+      const key = r.decision || 'unknown';
+      // normalize legacy decision value (pre-rename rows)
+      const norm = key === 'whisper_required' ? 'unresolvable' : key;
+      decisions[norm] = (decisions[norm] || 0) + r.n;
     }
 
     const ignored = db

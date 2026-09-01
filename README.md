@@ -124,7 +124,7 @@ Each movie ends up with:
 
   - synced
   - needs_adjustment
-  - whisper_required
+  - unresolvable
 
 - best_reference
 
@@ -206,7 +206,7 @@ Here is my real, day-to-day workflow.
 
    Instead, I look at:
 
-   - decision (synced, needs_adjustment, whisper_required)
+   - decision (synced, needs_adjustment, unresolvable)
    - the `Why:` explanation under it
    - anchor count
    - drift span

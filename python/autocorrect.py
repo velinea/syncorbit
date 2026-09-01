@@ -250,7 +250,7 @@ def choose_method(syncinfo: dict) -> str:
     offsets = clean_offsets or (syncinfo.get("offsets") or [])
 
     if anchors < 10 or not offsets:
-        return "whisper_required"
+        return "unresolvable"
 
     # Prefer the smoothed (binned) drift metric
     drift_span = syncinfo.get("drift_span_sec")
@@ -292,7 +292,7 @@ def choose_method(syncinfo: dict) -> str:
     if mad <= 0.6:
         return "global_offset"
 
-    return "whisper_required"
+    return "unresolvable"
 
 
 # ---------------------------------------------------------
@@ -641,7 +641,7 @@ def try_retime(target_srt: str, syncinfo: dict, out_dir: str):
     retime_info = json.loads(lines[-1]) if lines else {}
 
     if not os.path.exists(out_srt):
-        return {"status": "whisper_required", "method": "retime", "output_file": None}
+        return {"status": "unresolvable", "method": "retime", "output_file": None}
 
     after_sync = run_align_eval(en_path, out_srt)
     before = {
@@ -747,13 +747,13 @@ def main():
         if rt is not None:
             print(json.dumps(rt), flush=True)
             sys.exit(0)
-        print(json.dumps({"status": "whisper_required",
+        print(json.dumps({"status": "unresolvable",
                           "method": "retime", "output_file": None}), flush=True)
         sys.exit(0)
 
     method = forced if forced else choose_method(syncinfo)
 
-    if method == "whisper_required":
+    if method == "unresolvable":
         # Re-time fallback: if an English subtitle is available, re-time the
         # target text onto its timecodes rather than giving up.
         rt = try_retime(target_srt, syncinfo, AUTOCORRECT_DIR)
@@ -763,7 +763,7 @@ def main():
         print(
             json.dumps(
                 {
-                    "status": "whisper_required",
+                    "status": "unresolvable",
                     "method": method,
                     "output_file": None,
                 }
@@ -785,7 +785,7 @@ def main():
             print(
                 json.dumps(
                     {
-                        "status": "whisper_required",
+                        "status": "unresolvable",
                         "method": method,
                         "output_file": None,
                     }

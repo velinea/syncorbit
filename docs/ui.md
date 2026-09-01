@@ -61,8 +61,9 @@ Why:        Clean anchors: 563/1033, drift 0.05s, offset -0.09s
 | `Robust` | 4 × MAD (median absolute deviation) of per-cue deltas. An outlier-resistant spread measure; used as the anchor-spread sanity check for `synced`. |
 | `Raw span` | max − min of all raw anchor offsets, no cleaning. Diagnostic only — one bad match can blow it up. |
 | `Linear` | Fitted drift rate in seconds per hour, plus r² of the fit. High r² = drift is a clean linear stretch (auto-correctable); low r² = chaotic. |
-| `Decision` | `synced`, `needs_adjustment`, or `whisper_required`. |
+| `Decision` | `synced`, `needs_adjustment`, or `unresolvable`. |
 | `Why` | Plain-language reason for the decision (see below). |
+| `Hint` | For `unresolvable` pairs: contextual advice — whether a WhisperX re-reference may help, or whether the FI subtitle itself likely needs attention. |
 
 ### Decision logic (`decide_quality` in align.py)
 
@@ -71,12 +72,16 @@ becomes the `Why:` line:
 
 | Order | Gate | Threshold | Result |
 |---|---|---|---|
-| 1 | Anchor ratio | < 3% of ref lines | `whisper_required` — too few anchors to trust |
-| 2 | Drift span (binned) | > 3.5 s | `whisper_required` — progressive drift |
-| 3 | Residual after linear fit | > 2.5 s | `whisper_required` — non-linear drift |
-| 4 | Avg offset | \|offset\| > 4 s | `whisper_required` — large constant shift |
-| 5 | All clean: ratio ≥ 6%, drift ≤ 1.5 s, \|offset\| ≤ 1.5 s, spread ≤ 2.5 s | — | `synced` |
-| 6 | Anything else | — | `needs_adjustment` |
+| 1 | Anchor ratio | < 3% of ref lines | `unresolvable` — too few anchors to trust |
+| 2 | Drift span (binned) | > 3.5 s | `unresolvable` — progressive drift |
+| 3 | Avg offset | \|offset\| > 4 s | `unresolvable` — large constant shift |
+| 4 | All clean: ratio ≥ 6%, drift ≤ 1.5 s, \|offset\| ≤ 1.5 s, spread ≤ 2.5 s, residual ≤ 2.5 s | — | `synced` |
+| 5 | Anything else (incl. residual scatter > 2.5 s) | — | `needs_adjustment` — correctable with auto-correct |
+
+Residual scatter above 2.5 s no longer marks a movie `unresolvable`: the
+auto-correct piecewise warp absorbs offset segments and scatter alike
+(validated on the flagged-movie trial — 28/28 accepted fixes). `unresolvable`
+is reserved for pairs no method can align against the current reference.
 
 The same gate order is implemented server-side in `server.cjs`
 (`decisionReason()`), so the UI always explains decisions consistently.

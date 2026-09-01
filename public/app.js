@@ -191,6 +191,15 @@ function renderSummary(d, targetEl = manualSummaryPre) {
 
   const reason = d.reason || '';
 
+  // Contextual hint for unresolvable pairs (accepts legacy value too)
+  let hint = '';
+  if (decision === 'unresolvable' || decision === 'whisper_required') {
+    hint =
+      d.best_reference === 'whisper' || d.has_whisper
+        ? '\nHint: even a Whisper reference did not align —\nthe FI subtitle likely needs replacing or re-timing.'
+        : '\nHint: the current reference cannot be aligned.\nA WhisperX re-reference may help — or the FI\nsubtitle needs attention.';
+  }
+
   targetEl.textContent =
     `Ref:        ${d.reference_path || d.ref_path || ''}\n` +
     `Target:     ${d.target_path || d.target || ''}\n\n` +
@@ -205,7 +214,8 @@ function renderSummary(d, targetEl = manualSummaryPre) {
     `Raw span:   ${rawSpan} s   (min–max)\n` +
     `Linear:     ${driftPerHr} s/h   r²=${r2}\n` +
     `Decision:   ${decision}\n` +
-    (reason ? `Why:        ${reason}` : '');
+    (reason ? `Why:        ${reason}` : '') +
+    hint;
 }
 
 function setSummaryBackdrop(el, movieName) {
@@ -525,9 +535,9 @@ async function onAutoCorrectClick() {
           )}</pre>
         </details>
       `;
-    } else if (data.status === 'whisper_required') {
+    } else if (data.status === 'unresolvable' || data.status === 'whisper_required') {
       autoCorrectResult.textContent =
-        'Cannot auto-correct safely. Marked as whisper_required.';
+        'Cannot auto-correct safely. The subtitle pair is unresolvable with the current reference.';
     } else {
       autoCorrectResult.textContent = `Auto-correct failed: ${
         data.error || data.status
@@ -820,7 +830,7 @@ async function loadLibraryStats() {
       `${s.total} movies analyzed · ` +
       `${s.decisions.synced} synced · ` +
       `${s.decisions.needs_adjustment || 0} poor · ` +
-      `${s.decisions.whisper_required || 0} bad · ` +
+      `${(s.decisions.unresolvable ?? s.decisions.whisper_required) || 0} bad · ` +
       `${s.decisions.missing_subtitles} missing subtitles · ` +
       `${s.ignored} ignored`;
   } catch {}
