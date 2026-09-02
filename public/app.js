@@ -26,6 +26,8 @@ const autoCorrectBtn = document.getElementById('autoCorrectBtn');
 const autoCorrectResult = document.getElementById('autoCorrectResult');
 const downloadBtn = document.getElementById('downloadBtn');
 const bulkBtn = document.getElementById('bulkActionsBtn');
+const tvBulkBtn = document.getElementById('tvBulkActionsBtn');
+const bulkBtns = [bulkBtn, tvBulkBtn].filter(Boolean);
 const bulkResultBox = document.getElementById('bulkResultBox');
 const bulkResultPre = document.getElementById('bulkResultPre');
 const bulkModal = document.getElementById('bulkModal');
@@ -102,12 +104,12 @@ function hideSpinner() {
 
 function disableBulkUI() {
   document.getElementById('bulkRunBtn').disabled = true;
-  document.getElementById('bulkActionsBtn').disabled = true;
+  for (const btn of bulkBtns) btn.disabled = true;
 }
 
 function enableBulkUI() {
   document.getElementById('bulkRunBtn').disabled = false;
-  document.getElementById('bulkActionsBtn').disabled = false;
+  for (const btn of bulkBtns) btn.disabled = false;
 }
 
 function clearCanvas(c) {
@@ -1079,29 +1081,33 @@ async function loadTvStats() {
 function updateSelectionState() {
   const selected = document.querySelectorAll('.row-check:checked').length;
 
-  if (selected > 0) {
-    bulkBtn.disabled = false;
-    bulkBtn.classList.add('enabled');
-  } else {
-    bulkBtn.disabled = true;
-    bulkBtn.classList.remove('enabled');
+  for (const btn of bulkBtns) {
+    if (selected > 0) {
+      btn.disabled = false;
+      btn.classList.add('enabled');
+    } else {
+      btn.disabled = true;
+      btn.classList.remove('enabled');
+    }
   }
 }
-bulkBtn.addEventListener('click', () => {
-  const text = document.getElementById('bulkModalText');
+for (const btn of bulkBtns) {
+  btn.addEventListener('click', () => {
+    const text = document.getElementById('bulkModalText');
 
-  const checked = [...document.querySelectorAll('.row-check:checked')];
-  const selectedIds = checked.map(x => x.dataset.id);
-  const kinds = new Set(checked.map(x => x.dataset.kind));
-  const kind = kinds.size === 1 && kinds.has('tv') ? 'tv' : 'movie';
+    const checked = [...document.querySelectorAll('.row-check:checked')];
+    const selectedIds = checked.map(x => x.dataset.id);
+    const kinds = new Set(checked.map(x => x.dataset.kind));
+    const kind = kinds.size === 1 && kinds.has('tv') ? 'tv' : 'movie';
 
-  const label = kind === 'tv' ? 'episodes' : 'movies';
-  text.textContent = `Selected ${label}:\n${selectedIds.join('\n')}`;
+    const label = kind === 'tv' ? 'episodes' : 'movies';
+    text.textContent = `Selected ${label}:\n${selectedIds.join('\n')}`;
 
-  currentBulkSelection = selectedIds; // store for “Run” button
-  currentBulkKind = kind;
-  bulkModal.style.display = 'block';
-});
+    currentBulkSelection = selectedIds; // store for “Run” button
+    currentBulkKind = kind;
+    bulkModal.style.display = 'block';
+  });
+}
 
 document.addEventListener('click', async e => {
   const btn = e.target.closest('.reanalyze-btn');
