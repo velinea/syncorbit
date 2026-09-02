@@ -106,7 +106,9 @@ a.button:hover {
 
 /* Status indicators */
 #batchStatus,
-#libraryStats {
+#tvBatchStatus,
+#libraryStats,
+#tvStats {
   color: #aaa;
   font-size: 14px;
   padding-top: 6px;
@@ -118,25 +120,31 @@ a.button:hover {
   margin-bottom: 6px;
 }
 
-#statusTitle1 {
+#statusTitle1,
+#tvStatusTitle1 {
   grid-column: 1;
 }
 
-#statusTitle2 {
+#statusTitle2,
+#tvStatusTitle2 {
   grid-column: 4;
 }
 
 #statusTitle1,
-#statusTitle2 {
+#statusTitle2,
+#tvStatusTitle1,
+#tvStatusTitle2 {
   font-weight: bold;
   font-size: 1.5em;
 }
 
-#batchStatus {
+#batchStatus,
+#tvBatchStatus {
   grid-column: 2;
 }
 
-#libraryStats {
+#libraryStats,
+#tvStats {
   grid-column: 3;
   margin-right: 20px;
 }

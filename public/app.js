@@ -270,12 +270,29 @@ function formatDaysAgo(ts) {
 
 // -------- BATCH PROGRESS POLLING --------
 async function pollBatchProgress() {
-  const res = await fetch('/api/batch_progress');
-  const p = await res.json();
+  try {
+    const res = await fetch('/api/batch_progress');
+    const p = await res.json();
 
-  if (p.running) {
-    document.getElementById('batchStatus').textContent =
-      `Scanning folders ${p.index}/${p.total}: ${p.current_movie}`;
+    const movieStatus = document.getElementById('batchStatus');
+    const tvStatus = document.getElementById('tvBatchStatus');
+
+    if (p.running) {
+      const label = p.kind === 'tv' ? 'episodes' : 'folders';
+      const msg = `Scanning ${label} ${p.index}/${p.total}: ${p.current_movie}`;
+      if (p.kind === 'tv') {
+        if (tvStatus) tvStatus.textContent = msg;
+        if (movieStatus) movieStatus.textContent = 'Idle';
+      } else {
+        if (movieStatus) movieStatus.textContent = msg;
+        if (tvStatus) tvStatus.textContent = 'Idle';
+      }
+    } else {
+      if (movieStatus) movieStatus.textContent = 'Idle';
+      if (tvStatus) tvStatus.textContent = 'Idle';
+    }
+  } catch {
+    // polling is best-effort
   }
 }
 

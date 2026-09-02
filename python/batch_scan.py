@@ -64,29 +64,29 @@ CSV_FIELDS = [
 
 def upsert_movie_row(row: dict):
     con = sqlite3.connect(DB_PATH)
+    con.execute(
+        """
+      CREATE TABLE IF NOT EXISTS movies (
+        movie TEXT PRIMARY KEY,
+        anchor_count INTEGER,
+        avg_offset REAL,
+        drift_span REAL,
+        decision TEXT,
+        best_reference TEXT,
+        reference_path TEXT,
+        has_whisper INTEGER DEFAULT 0,
+        has_ffsubsync INTEGER DEFAULT 0,
+        fi_mtime INTEGER,
+        last_analyzed INTEGER,
+        ignored INTEGER DEFAULT 0,
+        state TEXT DEFAULT 'ok'
+      )
+    """
+    )
     ensure_column(con, "movies", "state", "state TEXT DEFAULT 'ok'")
+    row = normalize_movie_row(row)
 
     try:
-        con.execute(
-            """
-          CREATE TABLE IF NOT EXISTS movies (
-            movie TEXT PRIMARY KEY,
-            anchor_count INTEGER,
-            avg_offset REAL,
-            drift_span REAL,
-            decision TEXT,
-            best_reference TEXT,
-            reference_path TEXT,
-            has_whisper INTEGER DEFAULT 0,
-            has_ffsubsync INTEGER DEFAULT 0,
-            fi_mtime INTEGER,
-            last_analyzed INTEGER,
-            ignored INTEGER DEFAULT 0,
-            state TEXT DEFAULT 'ok'
-          )
-        """
-        )
-
         con.execute(
             """
           INSERT INTO movies (
@@ -161,36 +161,57 @@ def b64url_decode(s: str) -> str:
 
 def upsert_tv_row(row: dict):
     con = sqlite3.connect(DB_PATH)
+    con.execute(
+        """
+      CREATE TABLE IF NOT EXISTS tv_episodes (
+        episode_id TEXT PRIMARY KEY,
+        show_name TEXT,
+        season INTEGER,
+        episode_no INTEGER,
+        title TEXT,
+        anchor_count INTEGER,
+        avg_offset REAL,
+        drift_span REAL,
+        decision TEXT,
+        best_reference TEXT,
+        reference_path TEXT,
+        has_whisper INTEGER DEFAULT 0,
+        has_ffsubsync INTEGER DEFAULT 0,
+        fi_mtime INTEGER,
+        last_analyzed INTEGER,
+        ignored INTEGER DEFAULT 0,
+        state TEXT DEFAULT 'ok',
+        rel_path TEXT
+      )
+    """
+    )
     ensure_column(con, "tv_episodes", "rel_path", "rel_path TEXT")
     ensure_column(con, "tv_episodes", "show_name", "show_name TEXT")
     ensure_column(con, "tv_episodes", "season", "season INTEGER")
 
-    try:
-        con.execute(
-            """
-          CREATE TABLE IF NOT EXISTS tv_episodes (
-            episode_id TEXT PRIMARY KEY,
-            show_name TEXT,
-            season INTEGER,
-            episode_no INTEGER,
-            title TEXT,
-            anchor_count INTEGER,
-            avg_offset REAL,
-            drift_span REAL,
-            decision TEXT,
-            best_reference TEXT,
-            reference_path TEXT,
-            has_whisper INTEGER DEFAULT 0,
-            has_ffsubsync INTEGER DEFAULT 0,
-            fi_mtime INTEGER,
-            last_analyzed INTEGER,
-            ignored INTEGER DEFAULT 0,
-            state TEXT DEFAULT 'ok',
-            rel_path TEXT
-          )
-        """
-        )
+    defaults = {
+        "episode_id": None,
+        "show_name": None,
+        "season": None,
+        "episode_no": None,
+        "title": None,
+        "anchor_count": None,
+        "avg_offset": None,
+        "drift_span": None,
+        "decision": None,
+        "best_reference": None,
+        "reference_path": None,
+        "has_whisper": 0,
+        "has_ffsubsync": 0,
+        "fi_mtime": None,
+        "last_analyzed": None,
+        "ignored": 0,
+        "state": "ok",
+        "rel_path": None,
+    }
+    row = {**defaults, **row}
 
+    try:
         con.execute(
             """
           INSERT INTO tv_episodes (
@@ -589,7 +610,25 @@ def main():
 
     con = sqlite3.connect(DB_PATH)
 
-    ensure_column(con, "movies", "state", "state TEXT DEFAULT 'ok'")
+    con.execute(
+        """
+      CREATE TABLE IF NOT EXISTS movies (
+        movie TEXT PRIMARY KEY,
+        anchor_count INTEGER,
+        avg_offset REAL,
+        drift_span REAL,
+        decision TEXT,
+        best_reference TEXT,
+        reference_path TEXT,
+        has_whisper INTEGER DEFAULT 0,
+        has_ffsubsync INTEGER DEFAULT 0,
+        fi_mtime INTEGER,
+        last_analyzed INTEGER,
+        ignored INTEGER DEFAULT 0,
+        state TEXT DEFAULT 'ok'
+      )
+    """
+    )
 
     def get_known_movies(con):
         rows = con.execute("SELECT movie FROM movies").fetchall()
