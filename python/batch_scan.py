@@ -306,9 +306,20 @@ def load_scores(movie):
         return {}
 
 
-def collect_reference_candidates(movie_folder, movie_name):
+def _strip_lang_suffix(stem: str) -> str:
+    for suf in ("fi", "fin", "en", "eng", "finn", "finnish"):
+        if stem.lower().endswith(suf):
+            return stem[: -len(suf)]
+    return stem
+
+
+def collect_reference_candidates(movie_folder, movie_name, fi_srt=None):
     """
     Return a list of (ref_type, Path) for whisper, ffsubsync, or EN references.
+
+    For TV, `movie_folder` is a whole season directory and `fi_srt` is the FI
+    subtitle of the specific episode, so the EN reference is scoped to the same
+    episode instead of reusing whatever file happens to sort first.
     """
 
     refs = []
@@ -325,11 +336,20 @@ def collect_reference_candidates(movie_folder, movie_name):
             refs.append(("ffsync", srt))
 
     # EN references inside the media folder
-    for srt in movie_folder.glob("*.srt"):
-        stem = srt.stem.lower()
-        if stem.endswith(("en", "eng")):
-            refs.append(("en", srt))
-            break  # only need the first EN
+    if fi_srt is not None:
+        # TV: prefer the EN file that matches this episode's filename stem
+        fi_stem = _strip_lang_suffix(fi_srt.stem)
+        for srt in movie_folder.glob("*.srt"):
+            stem = srt.stem.lower()
+            if stem.endswith(("en", "eng")) and _strip_lang_suffix(srt.stem) == fi_stem:
+                refs.append(("en", srt))
+                break
+    else:
+        for srt in movie_folder.glob("*.srt"):
+            stem = srt.stem.lower()
+            if stem.endswith(("en", "eng")):
+                refs.append(("en", srt))
+                break  # only need the first EN
 
     return refs
 
@@ -513,7 +533,7 @@ def scan_tv():
             upsert_tv_row(row)
             continue
 
-        ref_candidates = collect_reference_candidates(season_dir, rel)
+        ref_candidates = collect_reference_candidates(season_dir, rel, srt)
         if not ref_candidates:
             row = {
                 "episode_id": episode_id,

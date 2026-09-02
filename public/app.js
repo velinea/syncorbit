@@ -707,10 +707,18 @@ if (tvLoadBtn) {
 }
 
 // TV search clear
-document.getElementById('tvClearSearch')?.addEventListener('click', () => {
-  tvSearchInput.value = '';
-  renderTvTable();
-});
+const tvClearSearch = document.getElementById('tvClearSearch');
+if (tvClearSearch) {
+  tvSearchInput.addEventListener('input', () => {
+    tvClearSearch.style.display = tvSearchInput.value ? 'block' : 'none';
+    renderTvTable();
+  });
+  tvClearSearch.addEventListener('click', () => {
+    tvSearchInput.value = '';
+    tvClearSearch.style.display = 'none';
+    renderTvTable();
+  });
+}
 
 const runBatchScanBtn = document.getElementById('runBatchScanBtn');
 

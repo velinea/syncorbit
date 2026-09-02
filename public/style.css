@@ -205,11 +205,13 @@ a.button:hover {
   display: inline-block;
 }
 
-#librarySearch {
+#librarySearch,
+#tvSearch {
   padding-right: 24px;
 }
 
-#clearSearch {
+#clearSearch,
+#tvClearSearch {
   position: absolute;
   right: 6px;
   top: 50%;
@@ -222,7 +224,8 @@ a.button:hover {
   font-size: 14px;
 }
 
-#clearSearch:hover {
+#clearSearch:hover,
+#tvClearSearch:hover {
   color: #fff;
 }
 
