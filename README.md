@@ -139,6 +139,29 @@ Each movie ends up with:
 
 The newest valid reference wins — unless manually overridden.
 
+## TV Shows
+
+SyncOrbit also manages TV libraries with a parallel `tv_episodes` table and a
+dedicated **TV Shows** tab (next to the Movies tab).
+
+**Directory structure** — one row per episode, scanned from `Show/Season N/`:
+
+```
+/media_tv
+  /Breaking Bad
+    /Season 1
+      Breaking Bad - S01E01.fi.srt   → row: "Breaking Bad - S01E01"
+      Breaking Bad - S01E01.en.srt
+    /Season 2
+      ...
+```
+
+- Loose/flat subtitle files not inside a `Show/Season N/` path are ignored.
+- Add the TV mount and a `TV_MEDIA_PATH` env var (see Deploying on Unraid).
+- Run `batch_scan.py --tv` (or the **Scan TV Shows** button in the UI) to
+  populate the table. All per-item and bulk actions (reanalyze, auto-correct,
+  whisper, ffsubsync, ignore) work for episodes too.
+
 ## UI Highlights
 
 - Fast library table (DB-backed)
@@ -326,7 +349,13 @@ Unraid runs the same image it builds, so there is no reason to build elsewhere.
    ```
 
 2. **Configure paths** — create `.env` from `.env.example` and point `MEDIA_PATH`
-   at your movies and `DATA_PATH` at a persistent app-data folder.
+   at your movies, `TV_MEDIA_PATH` at your TV library (e.g.
+   `/mnt/user/Media/Tv`), and `DATA_PATH` at a persistent app-data folder.
+
+   The TV path is mounted read-only into the container at `/app/media_tv`.
+   When managing the container in the Unraid Docker UI (not compose), add a
+   second Path mount: **Container** `/app/media_tv`, **Host**
+   `/mnt/user/Media/Tv`, Read-Only.
 
 3. **Update, build, restart** — from the repo folder (or via the Unraid
    *User Scripts* plugin):

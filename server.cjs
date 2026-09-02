@@ -50,6 +50,7 @@ function decisionReason(raw) {
 
 const PY = '/app/.venv/bin/python3';
 const MEDIA_ROOT = '/app/media';
+const MEDIA_ROOT_TV = process.env.SYNCORBIT_MEDIA_TV || '/app/media_tv';
 const DATA_ROOT = '/app/data';
 const WHISPER_ROOT = path.join(DATA_ROOT, 'ref');
 const FFSYNC_ROOT = path.join(DATA_ROOT, 'resync');
@@ -89,6 +90,54 @@ const upsertMovieStmt = db.prepare(`
 `);
 
 const getMovieStmt = db.prepare(`SELECT * FROM movies WHERE movie = ?`);
+const getTvEpStmt = db.prepare(`SELECT * FROM tv_episodes WHERE episode_id = ?`);
+
+function b64urlEncode(s) {
+  return Buffer.from(s, 'utf8').toString('base64url');
+}
+function b64urlDecode(s) {
+  return Buffer.from(s, 'base64url').toString('utf8');
+}
+function tvEpisodeKey(relPath) {
+  return b64urlEncode(relPath);
+}
+function tvRelPathFromEpId(id) {
+  try {
+    return b64urlDecode(id);
+  } catch {
+    return null;
+  }
+}
+
+// Resolve a bulk/reanalyze item's media folder for a given kind.
+// movie -> MEDIA_ROOT/<name>        (name is the folder name)
+// tv    -> MEDIA_ROOT_TV/<rel_path  (name is an episode_id, resolves to its Season dir)
+function resolveItemDir(kind, name) {
+  if (kind === 'tv') {
+    const row = getTvEpStmt.get(name);
+    if (!row) return null;
+    const relPath = row.rel_path ? tvRelPathFromEpId(name) || row.rel_path : '';
+    const parent = relPath ? path.posix.dirname(relPath) : '';
+    return safeJoin(MEDIA_ROOT_TV, parent);
+  }
+  return safeJoin(MEDIA_ROOT, name);
+}
+function resolveItemRefRoot(kind, name) {
+  if (kind === 'tv') {
+    const row = getTvEpStmt.get(name);
+    const relPath = row && row.rel_path ? row.rel_path : '';
+    return path.join(WHISPER_ROOT, relPath);
+  }
+  return path.join(WHISPER_ROOT, name);
+}
+function resolveItemResyncRoot(kind, name) {
+  if (kind === 'tv') {
+    const row = getTvEpStmt.get(name);
+    const relPath = row && row.rel_path ? row.rel_path : '';
+    return path.join(FFSYNC_ROOT, relPath);
+  }
+  return path.join(FFSYNC_ROOT, name);
+}
 
 // Ensure PATH & EXECJS runtime preference are correct for ffsubsync + PyExecJS
 process.env.EXECJS_RUNTIME = 'Node';
@@ -163,8 +212,12 @@ function saveIgnoreList(list) {
   fs.writeFileSync(IGNORE_FILE, JSON.stringify(list, null, 2));
 }
 
-function updateSyncInfoWithFfsync(movie, ffsyncData) {
-  const analysisDir = path.join(DATA_ROOT, 'analysis', movie);
+function updateSyncInfoWithFfsync(movie, ffsyncData, relPath) {
+  const analysisDir = path.join(
+    DATA_ROOT,
+    'analysis',
+    relPath || movie
+  );
   const syncPath = path.join(analysisDir, 'analysis.syncinfo');
 
   let info = {};
@@ -196,12 +249,14 @@ function updateSyncInfoWithFfsync(movie, ffsyncData) {
 }
 
 app.post('/api/bulk/ignore', express.json(), async (req, res) => {
-  const movies = req.body.movies || [];
+  const items = req.body.movies || [];
+  const kind = req.body.kind === 'tv' ? 'tv' : 'movie';
   let ignoreList = loadIgnoreList();
 
-  for (const m of movies) {
-    if (!ignoreList.includes(m)) {
-      ignoreList.push(m);
+  for (const it of items) {
+    const key = kind === 'tv' ? 'tv:' + it : it;
+    if (!ignoreList.includes(key)) {
+      ignoreList.push(key);
     }
   }
 
@@ -211,32 +266,48 @@ app.post('/api/bulk/ignore', express.json(), async (req, res) => {
 });
 
 app.post('/api/bulk/unignore', express.json(), async (req, res) => {
-  const movies = req.body.movies || [];
-  const set = new Set(movies);
+  const items = req.body.movies || [];
+  const kind = req.body.kind === 'tv' ? 'tv' : 'movie';
+  const keys = items.map(it => (kind === 'tv' ? 'tv:' + it : it));
+  const set = new Set(keys);
   const ignoreList = loadIgnoreList().filter(m => !set.has(m));
   saveIgnoreList(ignoreList);
 
   let updated = 0;
-  if (movies.length) {
-    const placeholders = movies.map(() => '?').join(',');
-    updated = db.prepare(
-      `UPDATE movies SET ignored = 0, state = 'ok' WHERE movie IN (${placeholders})`
-    ).run(...movies).changes;
+  if (items.length) {
+    if (kind === 'tv') {
+      const placeholders = items.map(() => '?').join(',');
+      updated = db
+        .prepare(
+          `UPDATE tv_episodes SET ignored = 0, state = 'ok' WHERE episode_id IN (${placeholders})`
+        )
+        .run(...items).changes;
+    } else {
+      const placeholders = items.map(() => '?').join(',');
+      updated = db.prepare(
+        `UPDATE movies SET ignored = 0, state = 'ok' WHERE movie IN (${placeholders})`
+      ).run(...items).changes;
+    }
   }
 
   res.json({ ok: true, total: ignoreList.length, updated });
 });
 
 app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
-  const movies = req.body.movies || [];
+  const items = req.body.movies || [];
+  const kind = req.body.kind === 'tv' ? 'tv' : 'movie';
   const results = [];
   const errors = [];
   const whisperUp = await whisperAvailable();
 
-  for (const movie of movies) {
+  for (const item of items) {
     try {
-      const movieDir = path.join(MEDIA_ROOT, movie);
-      const refDir = path.join(DATA_ROOT, 'ref', movie);
+      const movieDir = resolveItemDir(kind, item);
+      if (!movieDir) {
+        errors.push({ movie: item, error: 'not_found' });
+        continue;
+      }
+      const refDir = resolveItemRefRoot(kind, item);
       const refPath = path.join(refDir, 'ref.srt');
 
       fs.mkdirSync(refDir, { recursive: true });
@@ -248,7 +319,7 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
         const now = new Date();
         fs.utimesSync(refPath, now, now);
         results.push({
-          movie,
+          movie: item,
           ok: true,
           action: fs.existsSync(refPath) ? 'touched' : 'whisper_requested',
         });
@@ -261,14 +332,14 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
       const video = fs.readdirSync(movieDir).find(f => /\.(mkv|mp4|avi|mov)$/i.test(f));
 
       if (!video) {
-        errors.push({ movie, error: 'no_video_found' });
+        errors.push({ movie: item, error: 'no_video_found' });
         continue;
       }
 
       const videoPath = path.join(movieDir, video);
 
       if (!whisperUp) {
-        errors.push({ movie, error: 'whisperx_not_configured' });
+        errors.push({ movie: item, error: 'whisperx_not_configured' });
         continue;
       }
 
@@ -283,13 +354,13 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
 
       if (!resp.ok) {
         const text = await resp.text();
-        errors.push({ movie, error: `whisper_failed: ${text}` });
+        errors.push({ movie: item, error: `whisper_failed: ${text}` });
         continue;
       }
 
-      results.push({ movie, ok: true, action: 'whisper_requested' });
+      results.push({ movie: item, ok: true, action: 'whisper_requested' });
     } catch (err) {
-      errors.push({ movie, error: String(err) });
+      errors.push({ movie: item, error: String(err) });
     }
   }
 
@@ -297,7 +368,8 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
 });
 
 app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
-  const movies = req.body.movies || [];
+  const items = req.body.movies || [];
+  const kind = req.body.kind === 'tv' ? 'tv' : 'movie';
   const results = [];
   const errors = [];
 
@@ -310,16 +382,20 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
     }
   }
 
-  for (const movie of movies) {
+  for (const item of items) {
     try {
-      const movieDir = path.join(MEDIA_ROOT, movie);
+      const movieDir = resolveItemDir(kind, item);
+      if (!movieDir) {
+        errors.push({ movie: item, error: 'not_found' });
+        continue;
+      }
 
       // ----------------------------
       // Locate video
       // ----------------------------
       const video = fs.readdirSync(movieDir).find(f => /\.(mp4|mkv|avi|mov)$/i.test(f));
       if (!video) {
-        errors.push({ movie, error: 'No video file found' });
+        errors.push({ movie: item, error: 'No video file found' });
         continue;
       }
       const inVideo = path.join(movieDir, video);
@@ -331,7 +407,7 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
         .readdirSync(movieDir)
         .find(f => /\.en\.srt$/i.test(f) || /\.eng\.srt$/i.test(f));
       if (!sub) {
-        errors.push({ movie, error: 'No EN subtitle found' });
+        errors.push({ movie: item, error: 'No EN subtitle found' });
         continue;
       }
       const inSub = path.join(movieDir, sub);
@@ -339,7 +415,7 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
       // ----------------------------
       // Output path
       // ----------------------------
-      const outDir = path.join(DATA_ROOT, 'resync', movie);
+      const outDir = resolveItemResyncRoot(kind, item);
       fs.mkdirSync(outDir, { recursive: true });
 
       const base = path.basename(inSub).replace(/\.srt$/i, '');
@@ -363,13 +439,13 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
       });
 
       if (result.error) {
-        errors.push({ movie, error: result.error.message });
+        errors.push({ movie: item, error: result.error.message });
         continue;
       }
 
       if (result.status !== 0) {
         errors.push({
-          movie,
+          movie: item,
           error: result.stderr || result.stdout || 'ffsubsync failed',
         });
         continue;
@@ -392,7 +468,7 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
       const framerateFactor = frMatch ? parseFloat(frMatch[1]) : null;
 
       results.push({
-        movie,
+        movie: item,
         inSub,
         outSub,
         rawScore,
@@ -401,14 +477,14 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
         framerateFactor,
         log: stderr,
       });
-      updateSyncInfoWithFfsync(movie, {
-        outSub,
-        rawScore,
-        normalizedScore,
-        offsetSeconds,
-      });
+      const tvRow = kind === 'tv' ? getTvEpStmt.get(item) : null;
+      updateSyncInfoWithFfsync(
+        item,
+        { outSub, rawScore, normalizedScore, offsetSeconds },
+        tvRow ? tvRow.rel_path : null
+      );
     } catch (err) {
-      errors.push({ movie, error: err.message });
+      errors.push({ movie: item, error: err.message });
     }
   }
   res.json({ ok: true, results, errors });
@@ -556,6 +632,29 @@ app.post('/api/run-batch-scan', (req, res) => {
       res.status(500).json({
         status: 'error',
         detail: err || `batch_scan exited with ${code}`,
+      });
+    }
+  });
+});
+
+app.post('/api/run-tv-scan', (req, res) => {
+  const py = spawn(PY, ['/app/python/batch_scan.py', '--tv'], {
+    cwd: '/app',
+  });
+
+  let out = '';
+  let err = '';
+
+  py.stdout.on('data', d => (out += d.toString()));
+  py.stderr.on('data', d => (err += d.toString()));
+
+  py.on('close', code => {
+    if (code === 0) {
+      res.json({ status: 'ok', output: out });
+    } else {
+      res.status(500).json({
+        status: 'error',
+        detail: err || `batch_scan --tv exited with ${code}`,
       });
     }
   });
@@ -732,6 +831,142 @@ app.post('/api/reanalyze/:movie', async (req, res) => {
   }
 });
 
+app.post('/api/reanalyze/tv/:id', async (req, res) => {
+  const episodeId = req.params.id;
+  const row = getTvEpStmt.get(episodeId);
+  if (!row) return res.json({ ok: false, error: 'episode_not_found' });
+
+  const relPath = row.rel_path || tvRelPathFromEpId(episodeId) || '';
+  const parent = relPath ? path.posix.dirname(relPath) : '';
+  const movieDir = safeJoin(MEDIA_ROOT_TV, parent);
+
+  if (!movieDir || !fs.existsSync(movieDir)) {
+    return res.json({ ok: false, error: 'movie_not_found' });
+  }
+
+  // --- Ignore list (tv-prefixed keys) ---
+  const ignoreKeys = new Set(['tv:' + episodeId, 'tv:' + relPath, relPath]);
+  try {
+    if (fs.existsSync(IGNORE_FILE)) {
+      const ignored = JSON.parse(fs.readFileSync(IGNORE_FILE, 'utf8'));
+      if (ignored.some(k => ignoreKeys.has(k))) {
+        return res.json({ ok: false, error: 'ignored' });
+      }
+    }
+  } catch {}
+
+  // --- Reference selection ---
+  const whisperRef = path.join(DATA_ROOT, 'ref', relPath, 'ref.srt');
+  const resyncDir = path.join(DATA_ROOT, 'resync', relPath);
+  const refCandidates = [];
+
+  if (fs.existsSync(whisperRef)) {
+    refCandidates.push({
+      path: whisperRef,
+      type: 'whisper',
+      mtime: fs.statSync(whisperRef).mtimeMs,
+    });
+  }
+  if (fs.existsSync(resyncDir)) {
+    for (const f of fs.readdirSync(resyncDir)) {
+      if (!f.endsWith('.synced.srt')) continue;
+      const p = path.join(resyncDir, f);
+      refCandidates.push({ path: p, type: 'ffsync', mtime: fs.statSync(p).mtimeMs });
+    }
+  }
+  const list = fs.readdirSync(movieDir);
+  const en = list.find(
+    f => f.toLowerCase().endsWith('.en.srt') || f.toLowerCase().endsWith('.eng.srt')
+  );
+  if (en) {
+    const p = path.join(movieDir, en);
+    refCandidates.push({ path: p, type: 'en', mtime: fs.statSync(p).mtimeMs });
+  }
+  if (refCandidates.length === 0) {
+    return res.json({ ok: false, error: 'no_reference_found' });
+  }
+  refCandidates.sort((a, b) => b.mtime - a.mtime);
+  const { path: ref, type: refType } = refCandidates[0];
+
+  const fi = list.find(
+    f => f.toLowerCase().endsWith('.fi.srt') || f.toLowerCase().endsWith('.fin.srt')
+  );
+  if (!fi) {
+    return res.json({ ok: false, error: 'missing_finnish_subtitle' });
+  }
+  const tgt = path.join(movieDir, fi);
+
+  try {
+    const alignRes = await fetch('http://localhost:5010/api/align', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference: ref, target: tgt }),
+    });
+    const data = await alignRes.json();
+    if (!alignRes.ok || data.error) {
+      return res.json({ ok: false, error: data.error || 'align_failed' });
+    }
+
+    data.best_reference = refType;
+    data.reference_path = ref;
+
+    const syncDir = path.join(DATA_ROOT, 'analysis', relPath);
+    const syncFile = path.join(syncDir, 'analysis.syncinfo');
+    fs.mkdirSync(syncDir, { recursive: true });
+    fs.writeFileSync(syncFile, JSON.stringify(data, null, 2));
+
+    const now = Math.floor(Date.now() / 1000);
+    const fiMtime = findFiSubtitleMtime(movieDir);
+
+    let ignoredFlag = 0;
+    try {
+      const r = getTvEpStmt.get(episodeId);
+      if (r && r.ignored) ignoredFlag = 1;
+    } catch {}
+
+    const upd = {
+      episode_id: episodeId,
+      anchor_count: data.anchor_count ?? data.raw_anchor_count ?? 0,
+      avg_offset: data.median_offset_sec ?? data.avg_offset_sec ?? 0,
+      drift_span:
+        data.drift_span_sec ??
+        data.robust_drift_span_sec ??
+        data.raw_drift_span_sec ??
+        0,
+      decision: data.decision ?? 'unknown',
+      best_reference: refType,
+      reference_path: ref,
+      has_whisper: hasWhisper(relPath),
+      has_ffsubsync: hasFfsubsync(relPath),
+      fi_mtime: fiMtime,
+      last_analyzed: now,
+      ignored: ignoredFlag,
+      state: 'ok',
+    };
+    db.prepare(
+      `UPDATE tv_episodes SET
+         anchor_count=@anchor_count, avg_offset=@avg_offset, drift_span=@drift_span,
+         decision=@decision, best_reference=@best_reference, reference_path=@reference_path,
+         has_whisper=@has_whisper, has_ffsubsync=@has_ffsubsync,
+         fi_mtime=@fi_mtime, last_analyzed=@last_analyzed, ignored=@ignored, state=@state
+       WHERE episode_id=@episode_id`
+    ).run(upd);
+
+    const stored = getTvEpStmt.get(episodeId);
+    if (stored) {
+      stored.has_whisper = !!stored.has_whisper;
+      stored.has_ffsubsync = !!stored.has_ffsubsync;
+      stored.ignored = !!stored.ignored;
+    } else {
+      return res.json({ ok: false, error: 'db_update_failed' });
+    }
+
+    return res.json({ ok: true, episode_id: episodeId, row: stored });
+  } catch (err) {
+    return res.json({ ok: false, error: err.toString() });
+  }
+});
+
 app.get('/api/library', (req, res) => {
   try {
     const rows = db
@@ -772,6 +1007,49 @@ app.get('/api/library', (req, res) => {
   }
 });
 
+app.get('/api/library/tv', (req, res) => {
+  try {
+    const rows = db
+      .prepare(
+        `
+        SELECT
+          episode_id,
+          show_name,
+          season,
+          episode_no,
+          title,
+          state,
+          anchor_count,
+          avg_offset,
+          drift_span,
+          decision,
+          best_reference,
+          reference_path,
+          has_whisper,
+          has_ffsubsync,
+          fi_mtime,
+          last_analyzed,
+          ignored
+        FROM tv_episodes
+        ORDER BY show_name ASC, season ASC, episode_no ASC
+      `
+      )
+      .all()
+      .map(r => ({
+        ...r,
+        has_whisper: !!r.has_whisper,
+        has_ffsubsync: !!r.has_ffsubsync,
+        ignored: !!r.ignored,
+        decision: r.decision === 'whisper_required' ? 'unresolvable' : r.decision,
+      }));
+
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error('/api/library/tv (sqlite) failed:', err);
+    res.json({ ok: false, error: err.toString() });
+  }
+});
+
 app.get('/api/analysis/:movie', (req, res) => {
   try {
     const movie = req.params.movie;
@@ -789,54 +1067,7 @@ app.get('/api/analysis/:movie', (req, res) => {
 
     const raw = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
 
-    const anchorCount = raw.anchor_count ?? raw.raw_anchor_count ?? 0;
-    const refCount = raw.ref_count ?? 0;
-    const avgOffset =
-      raw.median_offset_sec ?? raw.avg_offset_sec ?? 0;
-    const driftSpan =
-      raw.drift_span_sec ?? raw.robust_drift_span_sec ?? 0;
-    const residualSpan = raw.residual_drift_span_sec ?? 0;
-    const robustSpan = raw.robust_drift_span_sec ?? 0;
-    const rawSpan = raw.raw_drift_span_sec ?? 0;
-    const anchorRatio = refCount > 0 ? anchorCount / refCount : 0;
-
-    const normalized = {
-      movie,
-
-      syncinfo_path: syncinfoPath,
-      // normalize legacy decision value (pre-rename syncinfo files)
-      decision: raw.decision === 'whisper_required' ? 'unresolvable' : raw.decision,
-      best_reference: raw.best_reference,
-      reference_path: raw.reference_path ?? raw.ref_path ?? null,
-      target_path: raw.target_path ?? raw.target ?? null,
-
-      // Canonical counts
-      anchor_count: anchorCount,
-      ref_count: refCount,
-      target_count: raw.target_count,
-
-      // Canonical offsets (seconds)
-      avg_offset: avgOffset,
-      max_offset: raw.max_offset_sec,
-      min_offset: raw.min_offset_sec,
-      drift_span: driftSpan,
-
-      // New diagnostics (why a decision was made)
-      anchor_ratio: anchorRatio,
-      residual_span: residualSpan,
-      robust_span: robustSpan,
-      raw_span: rawSpan,
-      linear_drift_per_hour: raw.linear_drift_per_hour ?? null,
-      linear_fit_r2: raw.linear_fit_r2 ?? null,
-      drift_bins: raw.drift_bins ?? [],
-      reason: decisionReason(raw),
-
-      // Graph data
-      offsets: raw.clean_offsets ?? raw.offsets,
-
-      // Optional diagnostics (keep for later UI)
-      raw: raw,
-    };
+    const normalized = normalizeAnalysis(raw, syncinfoPath, movie);
 
     res.json({ ok: true, data: normalized });
   } catch (err) {
@@ -844,6 +1075,76 @@ app.get('/api/analysis/:movie', (req, res) => {
     res.json({ ok: false, error: err.toString() });
   }
 });
+
+app.get('/api/analysis/tv/:id', (req, res) => {
+  try {
+    const row = getTvEpStmt.get(req.params.id);
+    if (!row) return res.json({ ok: false, error: 'no_syncinfo' });
+
+    const analysisRoot = path.join(DATA_ROOT, 'analysis');
+    const dir = safeJoin(analysisRoot, row.rel_path);
+    if (!dir) return res.json({ ok: false, error: 'invalid_episode' });
+
+    const syncinfoPath = path.join(dir, 'analysis.syncinfo');
+    if (!fs.existsSync(syncinfoPath)) {
+      return res.json({ ok: false, error: 'no_syncinfo' });
+    }
+
+    const raw = JSON.parse(fs.readFileSync(syncinfoPath, 'utf8'));
+    const normalized = normalizeAnalysis(raw, syncinfoPath, row.title);
+    normalized.episode_id = row.episode_id;
+
+    res.json({ ok: true, data: normalized });
+  } catch (err) {
+    console.error('tv analysis load error:', err);
+    res.json({ ok: false, error: err.toString() });
+  }
+});
+
+function normalizeAnalysis(raw, syncinfoPath, label) {
+  const anchorCount = raw.anchor_count ?? raw.raw_anchor_count ?? 0;
+  const refCount = raw.ref_count ?? 0;
+  const avgOffset =
+    raw.median_offset_sec ?? raw.avg_offset_sec ?? 0;
+  const driftSpan =
+    raw.drift_span_sec ?? raw.robust_drift_span_sec ?? 0;
+  const residualSpan = raw.residual_drift_span_sec ?? 0;
+  const robustSpan = raw.robust_drift_span_sec ?? 0;
+  const rawSpan = raw.raw_drift_span_sec ?? 0;
+  const anchorRatio = refCount > 0 ? anchorCount / refCount : 0;
+
+  return {
+    movie: label,
+
+    syncinfo_path: syncinfoPath,
+    // normalize legacy decision value (pre-rename syncinfo files)
+    decision: raw.decision === 'whisper_required' ? 'unresolvable' : raw.decision,
+    best_reference: raw.best_reference,
+    reference_path: raw.reference_path ?? raw.ref_path ?? null,
+    target_path: raw.target_path ?? raw.target ?? null,
+
+    anchor_count: anchorCount,
+    ref_count: refCount,
+    target_count: raw.target_count,
+
+    avg_offset: avgOffset,
+    max_offset: raw.max_offset_sec,
+    min_offset: raw.min_offset_sec,
+    drift_span: driftSpan,
+
+    anchor_ratio: anchorRatio,
+    residual_span: residualSpan,
+    robust_span: robustSpan,
+    raw_span: rawSpan,
+    linear_drift_per_hour: raw.linear_drift_per_hour ?? null,
+    linear_fit_r2: raw.linear_fit_r2 ?? null,
+    drift_bins: raw.drift_bins ?? [],
+    reason: decisionReason(raw),
+
+    offsets: raw.clean_offsets ?? raw.offsets,
+    raw: raw,
+  };
+}
 
 app.get('/api/movieinfo', (req, res) => {
   const file = req.query.file; // absolute path to the .syncinfo file
@@ -1037,61 +1338,50 @@ app.get('/api/listsubs/:movie', (req, res) => {
   res.json({ subs });
 });
 
+function collectStats(table) {
+  const total = db
+    .prepare(`SELECT COUNT(*) AS n FROM ${table}`)
+    .get().n;
+
+  const byDecision = db
+    .prepare(`SELECT decision, COUNT(*) AS n FROM ${table} GROUP BY decision`)
+    .all();
+
+  const decisions = {};
+  for (const r of byDecision) {
+    const key = r.decision || 'unknown';
+    // normalize legacy decision value (pre-rename rows)
+    const norm = key === 'whisper_required' ? 'unresolvable' : key;
+    decisions[norm] = (decisions[norm] || 0) + r.n;
+  }
+
+  const ignored = db
+    .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ignored = 1`)
+    .get().n;
+
+  const missing = db
+    .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE state = 'missing_subtitles'`)
+    .get().n;
+
+  const stats = { total, ignored, decisions };
+  stats.decisions['missing_subtitles'] = missing;
+  return stats;
+}
+
 app.get('/api/db/stats', (req, res) => {
   try {
-    const total = db
-      .prepare(
-        `
-      SELECT COUNT(*) AS n FROM movies
-    `
-      )
-      .get().n;
-
-    const byDecision = db
-      .prepare(
-        `
-      SELECT decision, COUNT(*) AS n
-      FROM movies
-      GROUP BY decision
-    `
-      )
-      .all();
-
-    const decisions = {};
-    for (const r of byDecision) {
-      const key = r.decision || 'unknown';
-      // normalize legacy decision value (pre-rename rows)
-      const norm = key === 'whisper_required' ? 'unresolvable' : key;
-      decisions[norm] = (decisions[norm] || 0) + r.n;
-    }
-
-    const ignored = db
-      .prepare(
-        `
-      SELECT COUNT(*) AS n FROM movies WHERE ignored = 1
-    `
-      )
-      .get().n;
-
-    const missing = db
-      .prepare(
-        `
-      SELECT COUNT(*) AS n FROM movies WHERE state = 'missing_subtitles'
-    `
-      )
-      .get().n;
-
-    const stats = {
-      total,
-      ignored,
-      decisions,
-    };
-
-    stats.decisions['missing_subtitles'] = missing;
-
-    res.json({ ok: true, stats });
+    res.json({ ok: true, stats: collectStats('movies') });
   } catch (err) {
     console.error('/api/db/stats failed:', err);
+    res.json({ ok: false, error: err.toString() });
+  }
+});
+
+app.get('/api/db/stats/tv', (req, res) => {
+  try {
+    res.json({ ok: true, stats: collectStats('tv_episodes') });
+  } catch (err) {
+    console.error('/api/db/stats/tv failed:', err);
     res.json({ ok: false, error: err.toString() });
   }
 });
@@ -1173,5 +1463,31 @@ app.get('/api/artwork/:movie', (req, res) => {
     res.status(404).end();
   }
 });
+
+app.get('/api/poster/tv/:id', (req, res) => {
+  sendTvImage(req.params.id, 'folder.jpg', res);
+});
+
+app.get('/api/artwork/tv/:id', (req, res) => {
+  sendTvImage(req.params.id, 'backdrop.jpg', res);
+});
+
+function sendTvImage(episodeId, filename, res) {
+  const row = getTvEpStmt.get(episodeId);
+  if (!row) return res.status(404).end();
+  const relPath = row.rel_path || tvRelPathFromEpId(episodeId) || '';
+  const parts = relPath.split('/');
+  // Try the show dir first (2 levels up from the episode file), then season dir
+  const candidates = [];
+  if (parts.length >= 2) candidates.push(parts.slice(0, 1).join('/'));
+  if (parts.length >= 3) candidates.push(parts.slice(0, 2).join('/'));
+  for (const cand of candidates) {
+    const dir = safeJoin(MEDIA_ROOT_TV, cand);
+    if (!dir) continue;
+    const img = path.join(dir, filename);
+    if (fs.existsSync(img)) return res.sendFile(img);
+  }
+  return res.status(404).end();
+}
 
 app.listen(5010, '0.0.0.0', () => console.log('SyncOrbit API running on :5010'));

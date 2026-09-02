@@ -18,7 +18,8 @@
       <h1>SyncOrbit - Subtitle Alignment</h1>
       <!-- Top-level tabs -->
       <nav id="tabs">
-        <button data-tab="library" class="active">Library</button>
+        <button data-tab="library" class="active">Movies</button>
+        <button data-tab="tv">TV Shows</button>
         <button data-tab="manual">Manual Align</button>
       </nav>
     </header>
@@ -146,6 +147,91 @@
               </div>
               <div id="autoCorrectResult" class="note" style="margin-top: 6px"></div>
               <canvas id="libraryGraph"></canvas>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- TV SHOWS TAB -->
+      <div id="tab-tv" class="tab">
+        <section class="card">
+          <div id="statusRow">
+            <div id="tvStatusTitle1">TV Shows</div>
+            <div id="tvBatchStatus">Idle</div>
+            <div id="tvStats" class="library-stats"></div>
+            <div id="tvStatusTitle2">Selected Episode Analysis</div>
+          </div>
+
+          <div class="library-controls">
+            <button id="tvRunBatchScanBtn" class="button-secondary">
+              Scan TV Shows
+            </button>
+            <button id="tvLoadBtn">Load summary</button>
+
+            <div class="search-wrapper">
+              <input id="tvSearch" type="text" placeholder="Search episode…" />
+              <button id="tvClearSearch" title="Clear">×</button>
+            </div>
+
+            <label class="library-limit-label">
+              Show
+              <select id="tvLimit">
+                <option value="20">20</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+                <option value="999999">All</option>
+              </select>
+              rows
+            </label>
+
+            <select id="tvStatus">
+              <option value="">All</option>
+              <option value="synced">Ok</option>
+              <option value="needs_adjustment">Poor</option>
+              <option value="unresolvable">Bad</option>
+            </select>
+          </div>
+
+          <div id="tvArea">
+            <div class="library-left">
+              <table id="tvTable">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th data-sort="fi_mtime">Recent</th>
+                    <th data-sort="title">Episode</th>
+                    <th data-sort="best_reference">
+                      <div style="float: right">Reference</div>
+                    </th>
+                    <th data-sort="anchor_count">Anch</th>
+                    <th data-sort="avg_offset">Offset</th>
+                    <th data-sort="drift_span">Drift</th>
+                    <th data-sort="decision">Status</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+
+              <div id="tvNote" class="note"></div>
+              <div id="tvPosterPreview" class="poster-preview hidden"></div>
+            </div>
+
+            <div class="library-right">
+              <pre id="tvSummary">
+                (select an episode row to view its analysis.syncinfo)</pre
+              >
+
+              <div id="tvAutoCorrectControls" class="library-controls">
+                <select id="tvAutoCorrectMethod" title="Correction method">
+                  <option value="auto" selected>Auto</option>
+                  <option value="global_offset">Global offset</option>
+                  <option value="piecewise_linear_warp">Linear warp</option>
+                  <option value="retime">Re-time to EN</option>
+                </select>
+                <button id="tvAutoCorrectBtn" disabled>Auto-correct</button>
+              </div>
+              <div id="tvAutoCorrectResult" class="note" style="margin-top: 6px"></div>
+              <canvas id="tvGraph"></canvas>
             </div>
           </div>
         </section>

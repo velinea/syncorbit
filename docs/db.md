@@ -3,7 +3,7 @@
 Assumptions:
 
 - DB file: /app/data/syncorbit.db
-- Table: movies
+- Tables: `movies` (Movies tab) and `tv_episodes` (TV Shows tab)
 - SQLite CLI installed (inside container or host)
 
 ## 🔎 1️⃣ Open the database (interactive shell)
@@ -182,6 +182,54 @@ Compare with what UI shows
 - If DB is wrong → batch_scan / reanalyze bug
 
 That separation is huge.
+
+## 🔎 13️⃣ TV episodes table
+
+The TV Shows tab lives in its own `tv_episodes` table (one row per episode):
+
+```
+.schema tv_episodes
+```
+
+```
+episode_id    TEXT PK   -- base64url-encoded relative path
+show_name     TEXT
+season        INT
+episode_no    INT
+title         TEXT      -- e.g. "Breaking Bad - S01E01" or manual title
+anchor_count  REAL
+avg_offset    REAL
+drift_span    REAL
+decision      TEXT
+best_reference TEXT
+reference_path TEXT
+has_whisper   INT
+has_ffsubsync INT
+fi_mtime      INT
+last_analyzed REAL
+ignored       INT
+state         TEXT
+rel_path      TEXT      -- plain relative path under /app/media_tv
+```
+
+See all TV episodes:
+
+```
+SELECT title, show_name, season, episode_no, decision
+FROM tv_episodes
+ORDER BY show_name, season, episode_no;
+```
+
+Count per decision:
+
+```
+SELECT decision, COUNT(*) AS count
+FROM tv_episodes
+GROUP BY decision;
+```
+
+`episode_id` is URL-safe and used by the TV API endpoints; decode it to get
+the subtitle path under `MEDIA_ROOT_TV`. Re-populated by `batch_scan.py --tv`.
 
 ## 🧠 Pro tips (worth remembering)
 

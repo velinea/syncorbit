@@ -6,6 +6,7 @@ services:
       - '5010:5010'
     volumes:
       - ${MEDIA_PATH}:/app/media:ro
+      - ${TV_MEDIA_PATH}:/app/media_tv:ro
       - ${DATA_PATH}:/app/data
     environment:
       - SYNCORBIT_DATA=/app/data

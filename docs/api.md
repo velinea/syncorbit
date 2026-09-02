@@ -28,6 +28,37 @@ Reads the movies table from SQLite (canonical state).
 - `state` is one of: `ok`, `missing_subtitles`, `ignored`
 - `drift_span` is the smoothed (median-per-time-bin) drift in seconds
 
+## /api/library/tv
+
+Reads the `tv_episodes` table from SQLite (canonical state for TV rows).
+
+    {
+    "ok": true,
+    "rows": [
+        {
+        "episode_id": "QnJlYWtpbmcgQmFkL1NlYXNvbiAxL01LZi5maS5zcnQ",
+        "title": "Breaking Bad - S01E01",
+        "show_name": "Breaking Bad",
+        "season": 1,
+        "episode_no": 1,
+        "state": "ok",
+        "anchor_count": 43,
+        "avg_offset": 406.68,
+        "drift_span": 0.0,
+        "decision": "unresolvable",
+        "best_reference": "en",
+        "has_whisper": false,
+        "has_ffsubsync": false,
+        "ignored": false
+        }
+      ]
+    }
+
+- `episode_id` is the **base64url-encoded relative path** of the FI subtitle
+  (e.g. `Breaking Bad/Season 1/…fi.srt`). It is URL-safe and used as the
+  identifier for all TV endpoints instead of a slash-bearing path.
+- `decision` is one of: `synced`, `needs_adjustment`, `unresolvable`
+
 ## /api/analysis/:movie
 
 Reads the stored `analysis.syncinfo` for one movie.
@@ -77,18 +108,34 @@ Runs `autocorrect.py` and returns `{ status, method, verdict, before, after, shi
 
 ## Bulk actions
 
-- POST `/api/bulk/ignore`  `{ movies: [...] }`
-- POST `/api/bulk/touch_whisper`  `{ movies: [...] }`
-- POST `/api/bulk/ffsubsync`  `{ movies: [...] }`
+Movie rows and TV episodes both use these endpoints. For TV, pass
+`kind: "tv"` in the body and use `episode_id` values instead of movie folder
+names.
+
+- POST `/api/bulk/ignore`  `{ movies: [...], kind? }`
+- POST `/api/bulk/touch_whisper`  `{ movies: [...], kind? }`
+- POST `/api/bulk/ffsubsync`  `{ movies: [...], kind? }`
 
 Each returns `{ ok, results, errors }`.
+
+## TV endpoints
+
+- GET `/api/library/tv` → reads the `tv_episodes` table
+- GET `/api/analysis/tv/:episode_id` → stored `analysis.syncinfo` for one episode
+- POST `/api/reanalyze/tv/:episode_id` → re-align one episode
+- GET `/api/poster/tv/:episode_id`, GET `/api/artwork/tv/:episode_id` → `folder.jpg` / `backdrop.jpg`
+- GET `/api/db/stats/tv` → episode summary counts
+- POST `/api/run-tv-scan` → start a TV library scan (recurses `Show/Season N/`)
+
+`episode_id` is a URL-safe base64url-encoded relative path; decode it to get
+the subtitle path under `MEDIA_ROOT_TV`.
 
 ## Other endpoints
 
 - GET `/api/db/stats` → library summary counts
 - GET `/api/poster/:movie`, GET `/api/artwork/:movie` → `folder.jpg` / `backdrop.jpg`
 - GET `/api/listsubs/:movie` → media / whisper / autocorrect / resync subtitle files
-- GET `/api/batch_progress` → batch scan progress
+- GET `/api/batch_progress` → batch scan progress (includes a `kind` field)
 - POST `/api/run-batch-scan` → start a full library scan
 - POST `/api/reanalyze/:movie` → re-align one movie against its newest reference
 - GET `/api/searchsubs?q=…` → subtitle search

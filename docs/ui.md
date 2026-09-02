@@ -10,6 +10,28 @@
     ↓
     renderLibraryTable(rows)
 
+## TV Shows tab (parallel flow)
+
+TV uses a separate `tv_episodes` table and `Show/Season N/` directory structure:
+
+    batch_scan.py --tv           ← writes SQLite (tv_episodes)
+    ↓
+    /api/library/tv
+    ↓
+    loadTv()
+    ↓
+    renderTvTable(rows)
+
+    User clicks episode row
+    ↓
+    /api/analysis/tv/:episode_id  ← reads analysis/<relpath>/analysis.syncinfo
+    ↓
+    openTvAnalysis()
+
+- One row per episode (e.g. `Breaking Bad - S01E01`).
+- Loose/flat subtitle files not in a `Show/Season N/` path are ignored.
+- `episode_id` = base64url-encoded relative path (URL-safe identifier).
+
     User clicks movie row
     ↓
     /api/analysis/:movie          ← reads analysis/<movie>/analysis.syncinfo

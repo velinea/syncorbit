@@ -16,14 +16,19 @@ import sqlite3
 import csv
 import json
 import os
+import re
+import sys
 import time
 import subprocess
+import base64
 from pathlib import Path
 
 # ----------------------------
 # Root paths
 # ----------------------------
 MEDIA_ROOT = Path("/app/media")  # read-only mount
+MEDIA_ROOT_TV = Path(os.environ.get("SYNCORBIT_MEDIA_TV", "/app/media_tv"))
+TV_EP_ID = "tv"  # region flag for progress
 DATA_ROOT = Path(os.environ.get("SYNCORBIT_DATA", "/app/data"))
 DB_PATH = DATA_ROOT / "syncorbit.db"
 
@@ -34,8 +39,8 @@ SUMMARY_CSV = DATA_ROOT / "syncorbit_library_export.csv"
 IGNORE_FILE = DATA_ROOT / "ignore_list.json"
 PROGRESS_FILE = DATA_ROOT / "batch_progress.json"
 
-PY = "/app/.venv/bin/python3"
-ALIGN_PY = "/app/python/align.py"
+PY = os.environ.get("SYNCORBIT_PY", "/app/.venv/bin/python3")
+ALIGN_PY = os.environ.get("SYNCORBIT_ALIGN", "/app/python/align.py")
 
 CSV_FIELDS = [
     "movie",
@@ -145,6 +150,114 @@ def normalize_movie_row(row: dict) -> dict:
     return {**defaults, **row}
 
 
+def b64url_encode(s: str) -> str:
+    return base64.urlsafe_b64encode(s.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def b64url_decode(s: str) -> str:
+    pad = "=" * (-len(s) % 4)
+    return base64.urlsafe_b64decode((s + pad).encode("ascii")).decode("utf-8")
+
+
+def upsert_tv_row(row: dict):
+    con = sqlite3.connect(DB_PATH)
+    ensure_column(con, "tv_episodes", "rel_path", "rel_path TEXT")
+    ensure_column(con, "tv_episodes", "show_name", "show_name TEXT")
+    ensure_column(con, "tv_episodes", "season", "season INTEGER")
+
+    try:
+        con.execute(
+            """
+          CREATE TABLE IF NOT EXISTS tv_episodes (
+            episode_id TEXT PRIMARY KEY,
+            show_name TEXT,
+            season INTEGER,
+            episode_no INTEGER,
+            title TEXT,
+            anchor_count INTEGER,
+            avg_offset REAL,
+            drift_span REAL,
+            decision TEXT,
+            best_reference TEXT,
+            reference_path TEXT,
+            has_whisper INTEGER DEFAULT 0,
+            has_ffsubsync INTEGER DEFAULT 0,
+            fi_mtime INTEGER,
+            last_analyzed INTEGER,
+            ignored INTEGER DEFAULT 0,
+            state TEXT DEFAULT 'ok',
+            rel_path TEXT
+          )
+        """
+        )
+
+        con.execute(
+            """
+          INSERT INTO tv_episodes (
+            episode_id, show_name, season, episode_no, title,
+            anchor_count, avg_offset, drift_span, decision,
+            best_reference, reference_path,
+            has_whisper, has_ffsubsync,
+            fi_mtime, last_analyzed, ignored,
+            state, rel_path
+          ) VALUES (
+            :episode_id, :show_name, :season, :episode_no, :title,
+            :anchor_count, :avg_offset, :drift_span, :decision,
+            :best_reference, :reference_path,
+            :has_whisper, :has_ffsubsync,
+            :fi_mtime, :last_analyzed, :ignored,
+            :state, :rel_path
+          )
+          ON CONFLICT(episode_id) DO UPDATE SET
+            show_name=excluded.show_name,
+            season=excluded.season,
+            episode_no=excluded.episode_no,
+            title=excluded.title,
+            anchor_count=excluded.anchor_count,
+            avg_offset=excluded.avg_offset,
+            drift_span=excluded.drift_span,
+            decision=excluded.decision,
+            best_reference=excluded.best_reference,
+            reference_path=excluded.reference_path,
+            has_whisper=excluded.has_whisper,
+            has_ffsubsync=excluded.has_ffsubsync,
+            fi_mtime=excluded.fi_mtime,
+            last_analyzed=excluded.last_analyzed,
+            ignored=excluded.ignored,
+            state=excluded.state,
+            rel_path=excluded.rel_path
+        """,
+            row,
+        )
+
+        con.commit()
+    finally:
+        con.close()
+
+
+_EP_RE = re.compile(r"S(\d+)E(\d+)", re.IGNORECASE)
+_SEASON_RE = re.compile(r"season\s*(\d+)", re.IGNORECASE)
+
+
+def parse_episode(rel_path: str):
+    """Split a tv episode relpath into (show, season, ep_no, title).
+    Returns None if the path is not Show/Season N/episode."""
+    parts = Path(rel_path).parts
+    if len(parts) < 3:
+        return None
+    show = parts[0]
+    season_dir = parts[1]
+    fname = parts[-1]
+    m = _SEASON_RE.search(season_dir)
+    if not m:
+        return None
+    season = int(m.group(1))
+    ep = _EP_RE.search(fname)
+    ep_no = int(ep.group(2)) if ep else None
+    title = f"{show} - S{season:02d}E{ep_no:02d}" if ep_no else show
+    return show, season, ep_no, title
+
+
 def load_ignore_list():
     if IGNORE_FILE.exists():
         try:
@@ -208,6 +321,16 @@ def find_fi_sub(movie_folder):
     return None
 
 
+def find_all_fi_subs(season_folder):
+    """Return every FI (.fi/.fin) subtitle in a season folder, one per episode."""
+    result = []
+    for srt in season_folder.glob("*.srt"):
+        name = srt.stem.lower()
+        if name.endswith(("fi", "fin")) or "finn" in name or "finnish" in name:
+            result.append(srt)
+    return result
+
+
 def run_align(ref: Path, tgt: Path):
     """Run align.py and parse JSON result."""
     cmd = [PY, ALIGN_PY, str(ref), str(tgt)]
@@ -250,7 +373,7 @@ def write_summary_row(row: dict, csv_path: Path):
         writer.writerow(row)
 
 
-def update_progress(movie, index, total):
+def update_progress(movie, index, total, kind="movie"):
     try:
         with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
             json.dump(
@@ -258,6 +381,7 @@ def update_progress(movie, index, total):
                     "current_movie": movie,
                     "index": index,
                     "total": total,
+                    "kind": kind,
                 },
                 f,
             )
@@ -266,11 +390,190 @@ def update_progress(movie, index, total):
 
 
 # ----------------------------
-# Main scanning logic
+# TV scanning logic
 # ----------------------------
 
 
+def scan_tv():
+    """Scan the TV media root (Show/Season N/episode.srt) into tv_episodes."""
+    if not MEDIA_ROOT_TV.exists():
+        print(f"TV root not present: {MEDIA_ROOT_TV}")
+        update_progress("TV root missing", 0, 0, "tv")
+        return
+
+    # Collect every episode FI subtitle strictly under Show/Season N/
+    episodes = []  # (rel_path, Path)
+    for show_dir in sorted(MEDIA_ROOT_TV.iterdir()):
+        if not show_dir.is_dir() or show_dir.name.startswith("."):
+            continue
+        for season_dir in sorted(show_dir.iterdir()):
+            if not season_dir.is_dir() or season_dir.name.startswith("."):
+                continue
+            if not _SEASON_RE.search(season_dir.name):
+                continue
+            for fi in find_all_fi_subs(season_dir):
+                rel = str(fi.relative_to(MEDIA_ROOT_TV))
+                episodes.append((rel, fi))
+
+    if not episodes:
+        print("No TV episodes found.")
+        update_progress("Done", 0, 0, "tv")
+        return
+
+    # Prune tv_episodes rows whose media no longer exists
+    con = sqlite3.connect(DB_PATH)
+    try:
+        con.execute(
+            """
+          CREATE TABLE IF NOT EXISTS tv_episodes (
+            episode_id TEXT PRIMARY KEY,
+            show_name TEXT,
+            season INTEGER,
+            episode_no INTEGER,
+            title TEXT,
+            anchor_count INTEGER,
+            avg_offset REAL,
+            drift_span REAL,
+            decision TEXT,
+            best_reference TEXT,
+            reference_path TEXT,
+            has_whisper INTEGER DEFAULT 0,
+            has_ffsubsync INTEGER DEFAULT 0,
+            fi_mtime INTEGER,
+            last_analyzed INTEGER,
+            ignored INTEGER DEFAULT 0,
+            state TEXT DEFAULT 'ok',
+            rel_path TEXT
+          )
+        """
+        )
+        known = {r[0] for r in con.execute("SELECT episode_id FROM tv_episodes")}
+        still = {b64url_encode(rp) for rp, _ in episodes}
+        for stale in known - still:
+            con.execute("DELETE FROM tv_episodes WHERE episode_id = ?", (stale,))
+        con.commit()
+    finally:
+        con.close()
+    total = len(episodes)
+    update_progress("Starting TV scan...", 0, total, "tv")
+
+    for i, (rel, srt) in enumerate(episodes, 1):
+        update_progress(rel, i, total, "tv")
+
+        episode_id = b64url_encode(rel)
+        parsed = parse_episode(rel)
+        if parsed is None:
+            print(f"[STATE] Skipping non-seasoned episode: {rel}")
+            continue
+        show, season, ep_no, title = parsed
+
+        is_ignored = (
+            "tv:" + episode_id in ignored
+            or "tv:" + rel in ignored
+            or rel in ignored
+        )
+
+        season_dir = srt.parent
+        syncinfo_path = ANALYSIS_ROOT / rel / "analysis.syncinfo"
+        syncinfo_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if is_ignored:
+            row = {
+                "episode_id": episode_id,
+                "show_name": show,
+                "season": season,
+                "episode_no": ep_no,
+                "title": title,
+                "state": "ignored",
+                "rel_path": rel,
+                "decision": None,
+                "ignored": True,
+            }
+            upsert_tv_row(row)
+            continue
+
+        ref_candidates = collect_reference_candidates(season_dir, rel)
+        if not ref_candidates:
+            row = {
+                "episode_id": episode_id,
+                "show_name": show,
+                "season": season,
+                "episode_no": ep_no,
+                "title": title,
+                "state": "missing_subtitles",
+                "rel_path": rel,
+                "decision": None,
+            }
+            upsert_tv_row(row)
+            continue
+
+        resync_dir = RESYNC_ROOT / rel
+        has_ffsync = resync_dir.exists() and any(
+            p.name.endswith(".synced.srt") for p in resync_dir.iterdir()
+        )
+        ref_type, ref = max(ref_candidates, key=lambda x: x[1].stat().st_mtime)
+
+        fi_mtime = int(srt.stat().st_mtime)
+        now = time.time()
+
+        analyze = False
+        if not syncinfo_path.exists():
+            analyze = True
+        else:
+            sync_mtime = syncinfo_path.stat().st_mtime
+            if ref.stat().st_mtime > sync_mtime or srt.stat().st_mtime > sync_mtime:
+                analyze = True
+
+        if analyze:
+            try:
+                data = run_align(ref, srt)
+                data["best_reference"] = ref_type
+                data["reference_path"] = str(ref)
+            except Exception as e:
+                print(f"ERROR {rel}:", e)
+                continue
+            write_syncinfo(rel, data)
+
+        try:
+            with open(syncinfo_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            whisper_ref_path = REF_ROOT / rel / "ref.srt"
+            row = {
+                "episode_id": episode_id,
+                "show_name": show,
+                "season": season,
+                "episode_no": ep_no,
+                "title": title,
+                "anchor_count": data.get("anchor_count"),
+                "avg_offset": data.get("avg_offset_sec"),
+                "drift_span": data.get("drift_span_sec"),
+                "decision": data.get("decision"),
+                "best_reference": data.get("best_reference"),
+                "reference_path": data.get("reference_path"),
+                "has_whisper": whisper_ref_path.exists(),
+                "has_ffsubsync": has_ffsync,
+                "fi_mtime": fi_mtime,
+                "last_analyzed": now,
+                "ignored": 1 if is_ignored else 0,
+                "state": "ok",
+                "rel_path": rel,
+            }
+            upsert_tv_row(row)
+        except Exception:
+            print(f"ERROR reading syncinfo for {rel}:", e)
+            continue
+
+    print("TV scan complete.")
+    update_progress("Done", total, total, "tv")
+
+
 def main():
+    kind = "tv" if "--tv" in sys.argv else "movie"
+    if kind == "tv":
+        scan_tv()
+        return
+
     ANALYSIS_ROOT.mkdir(parents=True, exist_ok=True)
 
     # Always rebuild CSV fresh each run

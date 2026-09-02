@@ -351,7 +351,8 @@ button:disabled {
 
 /* Autocorrect controls share the library-controls row layout, but the
    method dropdown needs more width than the short library filters. */
-#autoCorrectMethod {
+#autoCorrectMethod,
+#tvAutoCorrectMethod {
   max-width: none;
 }
 .bulk-btn {
@@ -422,7 +423,8 @@ button:disabled {
   color: #e5e7eb;
 }
 
-#libraryArea {
+#libraryArea,
+#tvArea {
   display: grid;
   grid-template-columns: 650px auto;
   gap: 6px;
@@ -439,7 +441,8 @@ button:disabled {
 
 /* Library table */
 
-#libraryTable {
+#libraryTable,
+#tvTable {
   width: 100%;
   border-collapse: collapse;
   margin-top: 6px;
@@ -447,12 +450,15 @@ button:disabled {
 }
 
 #libraryTable th,
-#libraryTable td {
+#libraryTable td,
+#tvTable th,
+#tvTable td {
   padding: 3px 6px;
   border-bottom: 1px solid #1f2937;
 }
 
-#libraryTable th {
+#libraryTable th,
+#tvTable th {
   background: #0f172a;
   text-align: left;
   font-size: 14px;
@@ -460,11 +466,13 @@ button:disabled {
   user-select: none;
 }
 
-#libraryTable tbody tr {
+#libraryTable tbody tr,
+#tvTable tbody tr {
   cursor: pointer;
 }
 
-#libraryTable tbody tr:hover {
+#libraryTable tbody tr:hover,
+#tvTable tbody tr:hover {
   background: #020617;
 }
 
@@ -475,7 +483,8 @@ thead th {
   z-index: 10;
 }
 
-#libraryTable tbody tr.dimmed {
+#libraryTable tbody tr.dimmed,
+#tvTable tbody tr.dimmed {
   opacity: 0.5;
 }
 
@@ -510,6 +519,7 @@ thead th {
 /* Summary detail + artwork + graph */
 
 #librarySummary,
+#tvSummary,
 #manualSummary {
   white-space: pre-wrap;
   font-family: Consolas, monospace;
@@ -539,7 +549,8 @@ thead th {
   transition: background-image 250ms ease-in-out;
 }
 
-#libraryGraph {
+#libraryGraph,
+#tvGraph {
   display: block;
   width: 100%;
   height: 200px;
@@ -556,7 +567,8 @@ thead th {
   border: 1px solid #334155;
   z-index: 1000;
 }
-#autoCorrectControls {
+#autoCorrectControls,
+#tvAutoCorrectControls {
   margin-top: 8px;
 }
 #autoCorrectBtn {

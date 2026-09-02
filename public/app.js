@@ -30,6 +30,20 @@ const bulkResultBox = document.getElementById('bulkResultBox');
 const bulkResultPre = document.getElementById('bulkResultPre');
 const bulkModal = document.getElementById('bulkModal');
 
+// TV library elements
+const tvTableBody = document.getElementById('tvTable').querySelector('tbody');
+const tvNote = document.getElementById('tvNote');
+const tvSearchInput = document.getElementById('tvSearch');
+const tvStatusSelect = document.getElementById('tvStatus');
+const tvLimitSelect = document.getElementById('tvLimit');
+const tvSummaryPre = document.getElementById('tvSummary');
+const tvCanvas = document.getElementById('tvGraph');
+const tvAutoCorrectBtn = document.getElementById('tvAutoCorrectBtn');
+const tvAutoCorrectResult = document.getElementById('tvAutoCorrectResult');
+const tvPosterPreview = document.getElementById('tvPosterPreview');
+const tvRunBatchScanBtn = document.getElementById('tvRunBatchScanBtn');
+const tvLoadBtn = document.getElementById('tvLoadBtn');
+
 // Tabs
 const tabButtons = document.querySelectorAll('#tabs button');
 const tabViews = document.querySelectorAll('.tab');
@@ -41,6 +55,14 @@ let librarySortKey = 'fi_mtime';
 let librarySortDir = 'desc';
 let currentLibraryAnalysis = null;
 let currentBulkSelection = [];
+let currentBulkKind = 'movie';
+
+// TV state
+let tvRows = [];
+let tvSortKey = 'title';
+let tvSortDir = 'asc';
+let currentTvAnalysis = null;
+let tvLoaded = false;
 
 // -------- TAB SWITCHING --------
 
@@ -59,6 +81,11 @@ tabButtons.forEach(btn => {
     if (target === 'library' && libraryRows.length === 0) {
       loadLibrary();
       loadLibraryStats();
+    }
+    if (target === 'tv' && !tvLoaded) {
+      tvLoaded = true;
+      loadTv();
+      loadTvStats();
     }
   });
 });
@@ -99,6 +126,10 @@ function clearManualGraph() {
 
 function clearLibraryGraph() {
   clearCanvas(libraryCanvas);
+}
+
+function clearTvGraph() {
+  clearCanvas(tvCanvas);
 }
 
 function safe(v) {
@@ -448,25 +479,60 @@ if (autoCorrectBtn) {
   autoCorrectBtn.addEventListener('click', onAutoCorrectClick);
 }
 
-async function onAutoCorrectClick() {
-  if (!currentLibraryAnalysis) {
-    autoCorrectResult.textContent = 'Select a movie with analysis first.';
+async function loadTv() {
+  tvTableBody.innerHTML = "<tr><td colspan='5'>Loading…</td></tr>";
+
+  try {
+    const res = await fetch('/api/library/tv');
+    const json = await res.json();
+
+    if (!json.ok || !Array.isArray(json.rows)) {
+      tvRows = [];
+      tvTableBody.innerHTML = "<tr><td colspan='8'>Unexpected response.</td></tr>";
+      return;
+    }
+
+    tvRows = json.rows;
+    renderTvTable();
+
+    tvNote.textContent =
+      'Tip: use search / filters, then click any episode row to see its analysis.';
+  } catch (e) {
+    console.error('tv library error', e);
+    tvRows = [];
+    tvTableBody.innerHTML = "<tr><td colspan='5'>Error loading summary.</td></tr>";
+  }
+}
+
+if (tvAutoCorrectBtn) {
+  tvAutoCorrectBtn.addEventListener('click', () => onAutoCorrectClick('tv'));
+}
+
+async function onAutoCorrectClick(kind = 'movie') {
+  const isTv = kind === 'tv';
+  const resultEl = isTv ? tvAutoCorrectResult : autoCorrectResult;
+  const btn = isTv ? tvAutoCorrectBtn : autoCorrectBtn;
+  const methodSel = isTv ? 'tvAutoCorrectMethod' : 'autoCorrectMethod';
+  const analysis = isTv ? currentTvAnalysis : currentLibraryAnalysis;
+
+  if (!analysis) {
+    resultEl.textContent = 'Select an episode with analysis first.';
     return;
   }
 
-  const target = currentLibraryAnalysis.target_path;
-  const syncinfoPath = currentLibraryAnalysis.syncinfo_path;
+  const target = analysis.target_path;
+  const syncinfoPath = analysis.syncinfo_path;
   if (!target || !syncinfoPath) {
-    autoCorrectResult.textContent =
+    resultEl.textContent =
       'Missing target_path or syncinfo_path, cannot auto-correct.';
     return;
   }
 
-  autoCorrectBtn.disabled = true;
-  autoCorrectResult.textContent = 'Running auto-correction…';
+  btn.disabled = true;
+  resultEl.textContent = 'Running auto-correction…';
   showSpinner();
 
-  const method = document.getElementById('autoCorrectMethod')?.value || 'auto';
+  const method = document.getElementById(methodSel)?.value || 'auto';
 
   try {
     const res = await fetch('/api/autocorrect', {
@@ -491,14 +557,14 @@ async function onAutoCorrectClick() {
         detail = `Stretch: ${stretchPct}%  Shift: ${meta.shift_sec?.toFixed?.(3)} s`;
       }
 
-      autoCorrectResult.textContent = `Auto-corrected (${m}). Output: ${outfile}\n${detail}`;
+      resultEl.textContent = `Auto-corrected (${m}). Output: ${outfile}\n${detail}`;
       const downloadFilename = outfile.substring(outfile.lastIndexOf('/') + 1);
       const url =
         '/api/autocorrect/download?filename=' + encodeURIComponent(downloadFilename);
 
       const e = data;
 
-      autoCorrectResult.innerHTML = `
+      resultEl.innerHTML = `
         <b>Auto-correct evaluation</b>
         <pre>
         Method:        ${e.method}
@@ -536,19 +602,16 @@ async function onAutoCorrectClick() {
         </details>
       `;
     } else if (data.status === 'unresolvable' || data.status === 'whisper_required') {
-      autoCorrectResult.textContent =
+      resultEl.textContent =
         'Cannot auto-correct safely. The subtitle pair is unresolvable with the current reference.';
     } else {
-      autoCorrectResult.textContent = `Auto-correct failed: ${
-        data.error || data.status
-      }`;
+      resultEl.textContent = `Auto-correct failed: ${data.error || data.status}`;
     }
   } catch (e) {
     console.error('autocorrect error', e);
-    autoCorrectResult.textContent = 'Auto-correct failed: ' + e.message;
+    resultEl.textContent = 'Auto-correct failed: ' + e.message;
   } finally {
-    // Re-enable so user can retry
-    autoCorrectBtn.disabled = false;
+    btn.disabled = false;
     hideSpinner();
   }
 }
@@ -578,6 +641,60 @@ document.querySelectorAll('#libraryTable thead th[data-sort]').forEach(th => {
   });
 });
 
+// TV filters
+if (tvSearchInput) tvSearchInput.addEventListener('input', renderTvTable);
+if (tvStatusSelect) tvStatusSelect.addEventListener('change', renderTvTable);
+if (tvLimitSelect) tvLimitSelect.addEventListener('change', renderTvTable);
+
+// TV sorting via header click
+document.querySelectorAll('#tvTable thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (tvSortKey === key) {
+      tvSortDir = tvSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      tvSortKey = key;
+      tvSortDir = 'asc';
+    }
+    renderTvTable();
+  });
+});
+
+if (tvRunBatchScanBtn) {
+  tvRunBatchScanBtn.addEventListener('click', async () => {
+    tvRunBatchScanBtn.disabled = true;
+    tvRunBatchScanBtn.textContent = 'Scanning…';
+    try {
+      const res = await fetch('/api/run-tv-scan', { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        tvNote.textContent = 'Scan complete. Reloading…';
+        await loadTv();
+        loadTvStats();
+      } else {
+        tvNote.textContent = 'Scan failed: ' + data.detail;
+      }
+    } catch (err) {
+      tvNote.textContent = 'Error: ' + err.message;
+    }
+    tvRunBatchScanBtn.textContent = 'Scan TV Shows';
+    tvRunBatchScanBtn.disabled = false;
+  });
+}
+
+if (tvLoadBtn) {
+  tvLoadBtn.addEventListener('click', () => {
+    loadTv();
+    loadTvStats();
+  });
+}
+
+// TV search clear
+document.getElementById('tvClearSearch')?.addEventListener('click', () => {
+  tvSearchInput.value = '';
+  renderTvTable();
+});
+
 const runBatchScanBtn = document.getElementById('runBatchScanBtn');
 
 runBatchScanBtn.addEventListener('click', async () => {
@@ -603,53 +720,82 @@ runBatchScanBtn.addEventListener('click', async () => {
 });
 
 function renderLibraryTable() {
-  if (!libraryTableBody) return;
+  renderTable(libraryRows, {
+    kind: 'movie',
+    body: libraryTableBody,
+    note: libNote,
+    search: librarySearchInput,
+    status: libraryStatusSelect,
+    limit: libraryLimitSelect,
+    getSortKey: () => librarySortKey,
+    getSortDir: () => librarySortDir,
+    previewEl: posterPreview,
+    label: 'movie',
+    openAnalysis: openLibraryAnalysis,
+  });
+}
 
-  if (!libraryRows.length) {
-    libraryTableBody.innerHTML =
-      "<tr><td colspan='5'>No rows loaded. Click “Load summary”.</td></tr>";
+function renderTvTable() {
+  renderTable(tvRows, {
+    kind: 'tv',
+    body: tvTableBody,
+    note: tvNote,
+    search: tvSearchInput,
+    status: tvStatusSelect,
+    limit: tvLimitSelect,
+    getSortKey: () => tvSortKey,
+    getSortDir: () => tvSortDir,
+    previewEl: tvPosterPreview,
+    label: 'episode',
+    openAnalysis: openTvAnalysis,
+  });
+}
+
+function renderTable(rows, ctx) {
+  if (!ctx.body) return;
+  const { body, previewEl } = ctx;
+
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan='5'>No rows loaded. Click “Load summary”.</td></tr>`;
     return;
   }
 
-  const searchTerm = librarySearchInput.value.trim().toLowerCase();
-  const statusFilter = libraryStatusSelect.value;
-  const limit = parseInt(libraryLimitSelect.value, 10) || 100;
+  const searchTerm = ctx.search.value.trim().toLowerCase();
+  const statusFilter = ctx.status.value;
+  const limit = parseInt(ctx.limit.value, 10) || 100;
 
-  let rows = libraryRows.filter(r => {
-    if (searchTerm && !r.movie.toLowerCase().includes(searchTerm)) return false;
+  let filtered = rows.filter(r => {
+    const hay = (r.title || r.movie || '').toLowerCase();
+    if (searchTerm && !hay.includes(searchTerm)) return false;
     if (statusFilter && r.decision !== statusFilter) return false;
     return true;
   });
 
-  rows.sort((a, b) => {
-    let av = a[librarySortKey];
-    let bv = b[librarySortKey];
-
+  filtered.sort((a, b) => {
+    let av = a[ctx.getSortKey()];
+    let bv = b[ctx.getSortKey()];
     if (typeof av === 'string') av = av.toLowerCase();
     if (typeof bv === 'string') bv = bv.toLowerCase();
-
-    if (av < bv) return librarySortDir === 'asc' ? -1 : 1;
-    if (av > bv) return librarySortDir === 'asc' ? 1 : -1;
+    if (av < bv) return ctx.getSortDir() === 'asc' ? -1 : 1;
+    if (av > bv) return ctx.getSortDir() === 'asc' ? 1 : -1;
     return 0;
   });
 
-  const limited = rows.slice(0, limit);
-
+  const limited = filtered.slice(0, limit);
   if (!limited.length) {
-    libraryTableBody.innerHTML =
-      "<tr><td colspan='5'>No matches for current filters.</td></tr>";
+    body.innerHTML = `<tr><td colspan='5'>No matches for current filters.</td></tr>`;
     return;
   }
 
-  libraryTableBody.innerHTML = '';
+  body.innerHTML = '';
 
   limited.forEach(r => {
+    const id = r.episode_id || r.movie;
     const tr = document.createElement('tr');
     const dimmed = r.state !== 'ok';
     tr.classList.toggle('dimmed', dimmed);
 
     let refBadge = '';
-
     if (r.best_reference === 'whisper') {
       refBadge = `<span class="ref-badge ref-whisper">Whisper</span>`;
     } else if (r.best_reference === 'ffsync') {
@@ -662,51 +808,56 @@ function renderLibraryTable() {
         title="${r.reference_path}">${r.best_reference}</span>`;
     }
 
+    const title = r.title || r.movie;
+    const reanalyzeUrl =
+      ctx.kind === 'tv'
+        ? `/api/reanalyze/tv/${encodeURIComponent(id)}`
+        : `/api/reanalyze/${encodeURIComponent(id)}`;
+    const posterUrl =
+      ctx.kind === 'tv'
+        ? `/api/poster/tv/${encodeURIComponent(id)}`
+        : `/api/poster/${encodeURIComponent(id)}`;
+
     tr.innerHTML = `
       <td><input type="checkbox"
-      class="row-check"
-      data-movie="${r.movie}" onclick="event.stopPropagation()"></td>
+      class="row-check row-check-${ctx.kind}"
+      data-id="${id}" onclick="event.stopPropagation()"></td>
       <td class="recent-col" title="${
         r.fi_mtime ? new Date(r.fi_mtime * 1000).toLocaleString() : 'No FI subtitle'
       }">
       ${formatDaysAgo(r.fi_mtime)}
       </td>
-      <td>${shortTitle(r.movie)}</td>
+      <td>${shortTitle(title)}</td>
       <td>${renderStateBadge(r)} ${refBadge}</td>
       <td>${r.state !== 'ok' ? '-' : r.anchor_count}</td>
       <td>${r.state !== 'ok' ? '-' : safe(r.avg_offset)}</td>
       <td>${r.state !== 'ok' ? '-' : safe(r.drift_span)}</td>
       <td>${r.state !== 'ok' ? '-' : shortStatus(r.decision)}
-        <span class="reanalyze-status" data-movie="${r.movie}"></span>
+        <span class="reanalyze-status" data-id="${id}"></span>
       </td>
-      <td><button class="reanalyze-btn" data-movie="${
-        r.movie
-      }" title="Re-analyze this movie">
+      <td><button class="reanalyze-btn" data-id="${id}"
+          data-kind="${ctx.kind}" title="Re-analyze this ${ctx.label}">
       &#128472;</button>
       </td>
     `;
 
     tr.addEventListener('click', e => {
-      // Ignore clicks on controls inside the row
       if (e.target.closest('.reanalyze-btn')) return;
       if (e.target.closest('.row-check')) return;
       if (e.target.closest('button')) return;
-
-      openLibraryAnalysis(r);
+      ctx.openAnalysis(r);
     });
 
-    // Poster preview on hover
     tr.addEventListener('mouseenter', () => {
-      const url = `/api/poster/${encodeURIComponent(r.movie)}`;
-      posterPreview.style.backgroundImage = `url("${url}")`;
-      posterPreview.classList.add('show');
+      if (!previewEl) return;
+      previewEl.style.backgroundImage = `url("${posterUrl}")`;
+      previewEl.classList.add('show');
     });
-
     tr.addEventListener('mouseleave', () => {
-      posterPreview.classList.remove('show');
+      if (previewEl) previewEl.classList.remove('show');
     });
 
-    libraryTableBody.appendChild(tr);
+    body.appendChild(tr);
   });
 }
 
@@ -799,19 +950,64 @@ async function openLibraryAnalysis(row) {
       autoCorrectResult.textContent =
         'Ready for auto-correction using current analysis.';
     } else {
-      autoCorrectBtn.disabled = true;
-      autoCorrectResult.textContent = row.whisper_ref
-        ? 'Target subtitle missing — cannot auto-correct.'
-        : 'No target subtitle available for auto-correction.';
+    autoCorrectBtn.disabled = true;
+    autoCorrectResult.textContent = row.whisper_ref
+      ? 'Target subtitle missing — cannot auto-correct.'
+      : 'No target subtitle available for auto-correction.';
+  }
+} catch (err) {
+  console.error('movieinfo error', err);
+  librarySummaryPre.textContent = 'Failed to load analysis: ' + err.message;
+  clearLibraryGraph();
+  currentLibraryAnalysis = null;
+  if (autoCorrectBtn) autoCorrectBtn.disabled = true;
+}
+}
+
+async function openTvAnalysis(row) {
+  tvSummaryPre.textContent = 'Loading analysis…';
+  clearTvGraph();
+  tvAutoCorrectResult.textContent = '';
+  if (tvAutoCorrectBtn) tvAutoCorrectBtn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/analysis/tv/${encodeURIComponent(row.episode_id)}`);
+    const json = await res.json();
+    if (!json.ok) {
+      tvSummaryPre.textContent = 'No analysis available for this episode yet.';
+      clearTvGraph();
+      currentTvAnalysis = null;
+      if (tvAutoCorrectBtn) tvAutoCorrectBtn.disabled = true;
+      return;
+    } else {
+      setSummaryBackdrop(tvSummaryPre, row.show_name || row.title);
+      currentTvAnalysis = json.data;
+      renderSummary(json.data, tvSummaryPre);
+      drawGraph(
+        tvCanvas,
+        json.data.clean_offsets || json.data.offsets || [],
+        json.data.raw?.drift_bins || []
+      );
+    }
+
+    if (tvAutoCorrectBtn && json.data.target_path) {
+      tvAutoCorrectBtn.disabled = false;
+      tvAutoCorrectResult.textContent =
+        'Ready for auto-correction using current analysis.';
+    } else {
+      tvAutoCorrectBtn.disabled = true;
+      tvAutoCorrectResult.textContent =
+        'No target subtitle available for auto-correction.';
     }
   } catch (err) {
-    console.error('movieinfo error', err);
-    librarySummaryPre.textContent = 'Failed to load analysis: ' + err.message;
-    clearLibraryGraph();
-    currentLibraryAnalysis = null;
-    if (autoCorrectBtn) autoCorrectBtn.disabled = true;
+    console.error('tv analysis error', err);
+    tvSummaryPre.textContent = 'Failed to load analysis: ' + err.message;
+    clearTvGraph();
+    currentTvAnalysis = null;
+    if (tvAutoCorrectBtn) tvAutoCorrectBtn.disabled = true;
   }
 }
+
 document.addEventListener('change', e => {
   if (e.target.classList.contains('row-check')) {
     updateSelectionState();
@@ -836,6 +1032,25 @@ async function loadLibraryStats() {
   } catch {}
 }
 
+function renderStats(el, label, s) {
+  el.textContent =
+    `${s.total} ${label} analyzed · ` +
+    `${s.decisions.synced} synced · ` +
+    `${s.decisions.needs_adjustment || 0} poor · ` +
+    `${(s.decisions.unresolvable ?? s.decisions.whisper_required) || 0} bad · ` +
+    `${s.decisions.missing_subtitles} missing subtitles · ` +
+    `${s.ignored} ignored`;
+}
+
+async function loadTvStats() {
+  try {
+    const res = await fetch('/api/db/stats/tv');
+    const json = await res.json();
+    if (!json.ok) return;
+    renderStats(document.getElementById('tvStats'), 'episodes', json.stats);
+  } catch {}
+}
+
 function updateSelectionState() {
   const selected = document.querySelectorAll('.row-check:checked').length;
 
@@ -850,13 +1065,16 @@ function updateSelectionState() {
 bulkBtn.addEventListener('click', () => {
   const text = document.getElementById('bulkModalText');
 
-  const selectedMovies = [...document.querySelectorAll('.row-check:checked')].map(
-    x => x.dataset.movie
-  );
+  const checked = [...document.querySelectorAll('.row-check:checked')];
+  const selectedIds = checked.map(x => x.dataset.id);
+  const kinds = new Set(checked.map(x => x.dataset.kind));
+  const kind = kinds.size === 1 && kinds.has('tv') ? 'tv' : 'movie';
 
-  text.textContent = `Selected movies:\n${selectedMovies.join('\n')}`;
+  const label = kind === 'tv' ? 'episodes' : 'movies';
+  text.textContent = `Selected ${label}:\n${selectedIds.join('\n')}`;
 
-  currentBulkSelection = selectedMovies; // store for “Run” button
+  currentBulkSelection = selectedIds; // store for “Run” button
+  currentBulkKind = kind;
   bulkModal.style.display = 'block';
 });
 
@@ -864,21 +1082,24 @@ document.addEventListener('click', async e => {
   const btn = e.target.closest('.reanalyze-btn');
   if (!btn) return;
 
-  const movie = btn.dataset.movie;
+  const id = btn.dataset.id;
+  const kind = btn.dataset.kind === 'tv' ? 'tv' : 'movie';
   const tr = btn.closest('tr');
   const spinner = tr.querySelector('.reanalyze-status');
 
   // Guard
-  if (!movie || !tr) return;
+  if (!id || !tr) return;
 
   // Show spinner
   spinner.innerHTML = `<span class="reanalyze-spinner"></span>`;
   btn.disabled = true;
 
   try {
-    const res = await fetch(`/api/reanalyze/${encodeURIComponent(movie)}`, {
-      method: 'POST',
-    });
+    const url =
+      kind === 'tv'
+        ? `/api/reanalyze/tv/${encodeURIComponent(id)}`
+        : `/api/reanalyze/${encodeURIComponent(id)}`;
+    const res = await fetch(url, { method: 'POST' });
     const json = await res.json();
 
     if (!json.ok) {
@@ -922,6 +1143,8 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     ffsubsync: '/api/bulk/ffsubsync',
   }[action.value];
 
+  const body = { movies: currentBulkSelection, kind: currentBulkKind };
+
   // --------------------------------------------------
   // 🔥 WHISPER: FIRE-AND-FORGET
   // --------------------------------------------------
@@ -929,7 +1152,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movies: currentBulkSelection }),
+      body: JSON.stringify(body),
     }).catch(err => {
       console.error('Whisper request failed:', err);
     });
@@ -955,7 +1178,7 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movies: currentBulkSelection }),
+      body: JSON.stringify(body),
     });
 
     const result = await res.json();
@@ -975,8 +1198,13 @@ document.getElementById('bulkRunBtn').onclick = async () => {
     enableBulkUI();
     document.querySelectorAll('.row-check:checked').forEach(cb => (cb.checked = false));
     updateSelectionState();
-    loadLibrary();
-    loadLibraryStats();
+    if (currentBulkKind === 'tv') {
+      loadTv();
+      loadTvStats();
+    } else {
+      loadLibrary();
+      loadLibraryStats();
+    }
   }
 };
 
