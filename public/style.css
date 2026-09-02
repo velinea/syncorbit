@@ -116,7 +116,7 @@ a.button:hover {
 
 #statusRow {
   display: grid;
-  grid-template-columns: 200px 1fr 320px 250px;
+  grid-template-columns: 100px 320px 320px auto;
   margin-bottom: 6px;
 }
 
@@ -534,9 +534,9 @@ thead th {
 #manualSummary {
   white-space: pre-wrap;
   font-family: Consolas, monospace;
-  font-size: 16px;
+  font-size: 14px;
 
-  min-height: 350px;
+  min-height: 250px;
   max-height: 400px;
   overflow-y: auto;
 
