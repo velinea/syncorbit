@@ -109,6 +109,39 @@ function tvRelPathFromEpId(id) {
   }
 }
 
+const TV_LANG_SUFFIXES = ['fi', 'fin', 'en', 'eng', 'finn', 'finnish'];
+
+function stripLangSuffix(stem) {
+  const lower = stem.toLowerCase();
+  for (const suf of TV_LANG_SUFFIXES) {
+    if (lower.endsWith(suf)) return stem.slice(0, -suf.length);
+  }
+  return stem;
+}
+
+// In a TV season dir, resolve the specific episode's FI target (exact filename)
+// and its matching EN reference (same base stem, en/eng suffix).
+function tvEpisodeFiles(seasonDir, fiRelPath) {
+  const fiName = path.basename(fiRelPath);
+  const fiPath = path.join(seasonDir, fiName);
+  if (!fs.existsSync(fiPath)) {
+    return { fi: null, en: null };
+  }
+  const fiStem = stripLangSuffix(fiName.replace(/\.srt$/i, ''));
+  let en = null;
+  for (const f of fs.readdirSync(seasonDir)) {
+    const lc = f.toLowerCase();
+    if (!lc.endsWith('.srt')) continue;
+    if (!(lc.endsWith('.en.srt') || lc.endsWith('.eng.srt'))) continue;
+    const stem = stripLangSuffix(f.replace(/\.srt$/i, ''));
+    if (stem.toLowerCase() === fiStem.toLowerCase()) {
+      en = f;
+      break;
+    }
+  }
+  return { fi: fiName, en };
+}
+
 // Resolve a bulk/reanalyze item's media folder for a given kind.
 // movie -> MEDIA_ROOT/<name>        (name is the folder name)
 // tv    -> MEDIA_ROOT_TV/<rel_path  (name is an episode_id, resolves to its Season dir)
@@ -874,12 +907,9 @@ app.post('/api/reanalyze/tv/:id', async (req, res) => {
       refCandidates.push({ path: p, type: 'ffsync', mtime: fs.statSync(p).mtimeMs });
     }
   }
-  const list = fs.readdirSync(movieDir);
-  const en = list.find(
-    f => f.toLowerCase().endsWith('.en.srt') || f.toLowerCase().endsWith('.eng.srt')
-  );
-  if (en) {
-    const p = path.join(movieDir, en);
+  const { fi: fiName, en: enName } = tvEpisodeFiles(movieDir, relPath);
+  if (enName) {
+    const p = path.join(movieDir, enName);
     refCandidates.push({ path: p, type: 'en', mtime: fs.statSync(p).mtimeMs });
   }
   if (refCandidates.length === 0) {
@@ -888,13 +918,10 @@ app.post('/api/reanalyze/tv/:id', async (req, res) => {
   refCandidates.sort((a, b) => b.mtime - a.mtime);
   const { path: ref, type: refType } = refCandidates[0];
 
-  const fi = list.find(
-    f => f.toLowerCase().endsWith('.fi.srt') || f.toLowerCase().endsWith('.fin.srt')
-  );
-  if (!fi) {
+  if (!fiName) {
     return res.json({ ok: false, error: 'missing_finnish_subtitle' });
   }
-  const tgt = path.join(movieDir, fi);
+  const tgt = path.join(movieDir, fiName);
 
   try {
     const alignRes = await fetch('http://localhost:5010/api/align', {
@@ -916,7 +943,11 @@ app.post('/api/reanalyze/tv/:id', async (req, res) => {
     fs.writeFileSync(syncFile, JSON.stringify(data, null, 2));
 
     const now = Math.floor(Date.now() / 1000);
-    const fiMtime = findFiSubtitleMtime(movieDir);
+    let fiMtime = null;
+    try {
+      fiMtime = Math.floor(fs.statSync(tgt).mtimeMs / 1000);
+    } catch {}
+    if (fiMtime == null) fiMtime = findFiSubtitleMtime(movieDir);
 
     let ignoredFlag = 0;
     try {
