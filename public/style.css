@@ -116,7 +116,7 @@ a.button:hover {
 
 #statusRow {
   display: grid;
-  grid-template-columns: 100px 320px 320px auto;
+  grid-template-columns: 1fr 400px 300px 1fr;
   margin-bottom: 6px;
 }
 
