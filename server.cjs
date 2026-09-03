@@ -412,20 +412,18 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
         continue;
       }
 
-      const resp = await fetch(`${WHISPERX_URL}/transcribe`, {
+      // Fire-and-forget: do NOT await the (long-running) WhisperX transcription
+      // so the UI gets a fast response while whisper runs in the background.
+      fetch(`${WHISPERX_URL}/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           video_path: videoPath,
           output_path: refPath,
         }),
+      }).catch(err => {
+        console.error('WhisperX submit failed:', err);
       });
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        errors.push({ movie: item, error: `whisper_failed: ${text}` });
-        continue;
-      }
 
       results.push({ movie: item, ok: true, action: 'whisper_requested' });
     } catch (err) {
