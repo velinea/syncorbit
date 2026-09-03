@@ -448,21 +448,28 @@ app.post('/api/bulk/ffsubsync', express.json(), async (req, res) => {
       }
 
       // ----------------------------
-      // Locate video
+      // Locate video + EN subtitle (episode-scoped for TV)
       // ----------------------------
-      const video = fs.readdirSync(movieDir).find(f => /\.(mp4|mkv|avi|mov)$/i.test(f));
+      let video = null;
+      let sub = null;
+      if (kind === 'tv') {
+        const row = getTvEpStmt.get(item);
+        const relPath = row && row.rel_path ? row.rel_path : '';
+        const files = tvEpisodeFiles(movieDir, relPath);
+        video = tvEpisodeVideo(movieDir, relPath);
+        sub = files.en;
+      } else {
+        video = fs.readdirSync(movieDir).find(f => /\.(mp4|mkv|avi|mov)$/i.test(f));
+        sub = fs
+          .readdirSync(movieDir)
+          .find(f => /\.en\.srt$/i.test(f) || /\.eng\.srt$/i.test(f));
+      }
       if (!video) {
         errors.push({ movie: item, error: 'No video file found' });
         continue;
       }
       const inVideo = path.join(movieDir, video);
 
-      // ----------------------------
-      // Locate EN subtitle
-      // ----------------------------
-      const sub = fs
-        .readdirSync(movieDir)
-        .find(f => /\.en\.srt$/i.test(f) || /\.eng\.srt$/i.test(f));
       if (!sub) {
         errors.push({ movie: item, error: 'No EN subtitle found' });
         continue;
