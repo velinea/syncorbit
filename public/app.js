@@ -1100,8 +1100,15 @@ for (const btn of bulkBtns) {
     const kinds = new Set(checked.map(x => x.dataset.kind));
     const kind = kinds.size === 1 && kinds.has('tv') ? 'tv' : 'movie';
 
+    // Show readable titles (for TV the id is a base64url-encoded path).
+    const labels = checked.map(cb => {
+      const row = cb.closest('tr');
+      const title = row && row.querySelector('td:nth-child(3)');
+      return (title && title.textContent.trim()) || cb.dataset.id;
+    });
+
     const label = kind === 'tv' ? 'episodes' : 'movies';
-    text.textContent = `Selected ${label}:\n${selectedIds.join('\n')}`;
+    text.textContent = `Selected ${label}:\n${labels.join('\n')}`;
 
     currentBulkSelection = selectedIds; // store for “Run” button
     currentBulkKind = kind;

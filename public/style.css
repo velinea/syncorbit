@@ -141,6 +141,7 @@ a.button:hover {
 #batchStatus,
 #tvBatchStatus {
   grid-column: 2;
+  margin-right: 50px;
 }
 
 #libraryStats,

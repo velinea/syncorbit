@@ -38,48 +38,6 @@
           <div class="library-controls">
             <button id="bulkActionsBtn" disabled class="bulk-btn">Bulk Actions</button>
 
-            <!-- Bulk Action Modal -->
-            <div id="bulkModal">
-              <div id="bulkModalText" style="white-space: pre-line"></div>
-
-              <div style="margin-top: 15px">
-                <label
-                  ><input type="radio" name="bulkAction" value="touch_whisper" /> Use
-                  Whisper reference</label
-                ><br />
-                <label
-                  ><input type="radio" name="bulkAction" value="ignore" /> Ignore
-                  selected movie folders</label
-                ><br />
-                <label
-                  ><input type="radio" name="bulkAction" value="unignore" /> Unignore
-                  selected movie folders</label
-                ><br />
-                <label
-                  ><input type="radio" name="bulkAction" value="ffsubsync" /> Sync EN
-                  subtitle </label
-                ><br />
-              </div>
-              <!-- Bulk Action Results -->
-              <div
-                id="bulkResultBox"
-                class="card"
-                style="display: none; margin-top: 20px"
-              >
-                <h2 class="text-xl font-bold mb-2">ffsubsync Results</h2>
-
-                <!-- Only used for legacy text output, not needed once ffsubsync works -->
-                <pre id="bulkResultPre" style="display: none"></pre>
-
-                <!-- Results appended here by renderFfsubsyncResults() -->
-              </div>
-
-              <div id="bulkResultBtn">
-                <button id="bulkRunBtn">Run</button>
-                <button id="bulkModalClose">Close</button>
-              </div>
-            </div>
-
             <button id="runBatchScanBtn" class="button-secondary">Scan Library</button>
             <button id="loadLibraryBtn">Load summary</button>
 
@@ -268,5 +226,47 @@
         <canvas id="graphCanvas"></canvas>
       </div>
     </main>
+
+    <!-- Bulk Action Modal (global overlay, independent of active tab) -->
+    <div id="bulkModal">
+      <div id="bulkModalText" style="white-space: pre-line"></div>
+
+      <div style="margin-top: 15px">
+        <label
+          ><input type="radio" name="bulkAction" value="touch_whisper" /> Use
+          Whisper reference</label
+        ><br />
+        <label
+          ><input type="radio" name="bulkAction" value="ignore" /> Ignore
+          selected movie folders</label
+        ><br />
+        <label
+          ><input type="radio" name="bulkAction" value="unignore" /> Unignore
+          selected movie folders</label
+        ><br />
+        <label
+          ><input type="radio" name="bulkAction" value="ffsubsync" /> Sync EN
+          subtitle </label
+        ><br />
+      </div>
+      <!-- Bulk Action Results -->
+      <div
+        id="bulkResultBox"
+        class="card"
+        style="display: none; margin-top: 20px"
+      >
+        <h2 class="text-xl font-bold mb-2">ffsubsync Results</h2>
+
+        <!-- Only used for legacy text output, not needed once ffsubsync works -->
+        <pre id="bulkResultPre" style="display: none"></pre>
+
+        <!-- Results appended here by renderFfsubsyncResults() -->
+      </div>
+
+      <div id="bulkResultBtn">
+        <button id="bulkRunBtn">Run</button>
+        <button id="bulkModalClose">Close</button>
+      </div>
+    </div>
   </body>
 </html>
