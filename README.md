@@ -383,6 +383,20 @@ Compose Manager. The included `docker-compose.yml` supports both.
 - SyncOrbit calls it only when needed
 - Long jobs run in the background
 
+### WhisperX container mounts
+
+WhisperX receives the video path exactly as SyncOrbit sees it internally, so it
+must mount the same media paths at the same container-internal locations as the
+SyncOrbit container:
+
+- `/app/media` → your Movies host path (e.g. `/mnt/user/Media/Movies`)
+- `/app/media_tv` → your TV host path (e.g. `/mnt/user/Media/Tv`)
+
+It also needs `/app/data` pointing at the same SyncOrbit appdata host path, so
+the generated `ref.srt` lands where SyncOrbit reads it. If a media mount is
+missing, Whisper `touch_whisper` reports `no_video_found` (or can't run) even
+though the network is fine.
+
 This avoids:
 
 - UI blocking

@@ -145,6 +145,23 @@ function tvEpisodeFiles(seasonDir, fiRelPath) {
 // Resolve a bulk/reanalyze item's media folder for a given kind.
 // movie -> MEDIA_ROOT/<name>        (name is the folder name)
 // tv    -> MEDIA_ROOT_TV/<rel_path  (name is an episode_id, resolves to its Season dir)
+// In a TV season dir, resolve the video file that matches the selected episode's
+// stem (e.g. "Show.S01E05" -> "Show.S01E05.mkv"). Returns null if not found.
+function tvEpisodeVideo(seasonDir, fiRelPath) {
+  const fiStem = stripLangSuffix(path.basename(fiRelPath).replace(/\.srt$/i, ''));
+  let match = null;
+  try {
+    for (const f of fs.readdirSync(seasonDir)) {
+      if (!/\.(mkv|mp4|avi|mov)$/i.test(f)) continue;
+      const base = f.replace(/\.(mkv|mp4|avi|mov)$/i, '');
+      if (base.toLowerCase() === fiStem.toLowerCase()) {
+        match = f;
+        break;
+      }
+    }
+  } catch {}
+  return match;
+}
 function resolveItemDir(kind, name) {
   if (kind === 'tv') {
     const row = getTvEpStmt.get(name);
@@ -362,7 +379,14 @@ app.post('/api/bulk/touch_whisper', express.json(), async (req, res) => {
       // --------------------------------------------------
       // Case 2: Whisper ref missing → request WhisperX
       // --------------------------------------------------
-      const video = fs.readdirSync(movieDir).find(f => /\.(mkv|mp4|avi|mov)$/i.test(f));
+      let video = null;
+      if (kind === 'tv') {
+        const row = getTvEpStmt.get(item);
+        const relPath = row && row.rel_path ? row.rel_path : '';
+        video = tvEpisodeVideo(movieDir, relPath);
+      } else {
+        video = fs.readdirSync(movieDir).find(f => /\.(mkv|mp4|avi|mov)$/i.test(f));
+      }
 
       if (!video) {
         errors.push({ movie: item, error: 'no_video_found' });
