@@ -145,16 +145,28 @@ function tvEpisodeFiles(seasonDir, fiRelPath) {
 // Resolve a bulk/reanalyze item's media folder for a given kind.
 // movie -> MEDIA_ROOT/<name>        (name is the folder name)
 // tv    -> MEDIA_ROOT_TV/<rel_path  (name is an episode_id, resolves to its Season dir)
-// In a TV season dir, resolve the video file that matches the selected episode's
-// stem (e.g. "Show.S01E05" -> "Show.S01E05.mkv"). Returns null if not found.
+// Extract a normalized episode token (e.g. S01E05 / 1x05 -> "01e05") from a filename.
+// Returns null if no episode code is present.
+function extractEpToken(name) {
+  const base = path.basename(name);
+  let m = base.match(/\bS(\d{1,2})[.\s_-]*E(\d{1,3})\b/i);
+  if (m) return m[1].padStart(2, '0') + 'e' + m[2].padStart(2, '0');
+  m = base.match(/\b(\d{1,2})[xX](E?\d{1,3})\b/);
+  if (m) return m[1].padStart(2, '0') + 'e' + m[2].replace(/^e/i, '').padStart(2, '0');
+  // "S01" only (no episode number) also counts, matched above only via E
+  return null;
+}
+
+// In a TV season dir, resolve the video file that belongs to the selected episode
+// (matched by its episode token, e.g. S01E05). Returns null if not found.
 function tvEpisodeVideo(seasonDir, fiRelPath) {
-  const fiStem = stripLangSuffix(path.basename(fiRelPath).replace(/\.srt$/i, ''));
+  const token = extractEpToken(fiRelPath);
+  if (!token) return null;
   let match = null;
   try {
     for (const f of fs.readdirSync(seasonDir)) {
       if (!/\.(mkv|mp4|avi|mov)$/i.test(f)) continue;
-      const base = f.replace(/\.(mkv|mp4|avi|mov)$/i, '');
-      if (base.toLowerCase() === fiStem.toLowerCase()) {
+      if (extractEpToken(f) === token) {
         match = f;
         break;
       }
