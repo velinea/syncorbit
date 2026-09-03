@@ -1184,23 +1184,38 @@ document.getElementById('bulkRunBtn').onclick = async () => {
   const body = { movies: currentBulkSelection, kind: currentBulkKind };
 
   // --------------------------------------------------
-  // 🔥 WHISPER: FIRE-AND-FORGET
+  // 🔥 WHISPER: SUBMIT + REPORT
   // --------------------------------------------------
   if (action.value === 'touch_whisper') {
-    fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }).catch(err => {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+
+      const notes = [];
+      if (result.results && result.results.length) {
+        result.results.forEach(r => {
+          notes.push(`${r.ok ? '✓' : '✗'} ${r.movie}: ${r.action || r.error}`);
+        });
+      }
+      if (result.errors && result.errors.length) {
+        result.errors.forEach(e => notes.push(`✗ ${e.movie}: ${e.error}`));
+      }
+
+      alert(
+        (notes.length ? notes.join('\n') : 'No items processed.') +
+          '\n\nTranscription runs in the background when requested.'
+      );
+    } catch (err) {
       console.error('Whisper request failed:', err);
-    });
+      alert('Whisper request failed: ' + err.message);
+    }
 
     hideSpinner();
     enableBulkUI();
-
-    alert(
-      'Whisper requested.\n\nTranscription is running in the background.\nYou can continue using SyncOrbit.'
-    );
 
     document.getElementById('bulkModal').style.display = 'none';
     document.querySelectorAll('.row-check:checked').forEach(cb => (cb.checked = false));
