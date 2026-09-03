@@ -859,7 +859,7 @@ function renderTable(rows, ctx) {
       <td>${r.state !== 'ok' ? '-' : r.anchor_count}</td>
       <td>${r.state !== 'ok' ? '-' : safe(r.avg_offset)}</td>
       <td>${r.state !== 'ok' ? '-' : safe(r.drift_span)}</td>
-      <td>${r.state !== 'ok' ? '-' : shortStatus(r.decision)}
+      <td><span class="decision-cell">${r.state !== 'ok' ? '-' : shortStatus(r.decision)}</span>
         <span class="reanalyze-status" data-id="${id}"></span>
       </td>
       <td><button class="reanalyze-btn" data-id="${id}"
@@ -918,10 +918,20 @@ function updateLibraryRow(row, data) {
   row.querySelector('td:nth-child(6)').textContent = safe(data.avg_offset) ?? '';
   row.querySelector('td:nth-child(7)').textContent = safe(data.drift_span) ?? '';
 
-  // Update decision cell
-  const decisionCell = row.querySelector('td:nth-child(8)');
+  // Update decision cell (scoped to the decision span so the
+  // reanalyze-status spinner span in the same cell is never wiped)
+  const decisionCell = row.querySelector('.decision-cell');
   const decision = data.decision || 'unknown';
-  decisionCell.innerHTML = shortStatus(decision);
+  if (decisionCell) decisionCell.innerHTML = shortStatus(decision);
+
+  // Refresh the date cell so swapped-in files show their new mtime
+  const dateCell = row.querySelector('td.recent-col');
+  if (dateCell) {
+    dateCell.textContent = formatDaysAgo(data.fi_mtime);
+    dateCell.title = data.fi_mtime
+      ? new Date(data.fi_mtime * 1000).toLocaleString()
+      : 'No FI subtitle';
+  }
 
   // Update badges if needed
   const badgeCell = row.querySelector('td:nth-child(4)');
@@ -1123,13 +1133,14 @@ document.addEventListener('click', async e => {
   const id = btn.dataset.id;
   const kind = btn.dataset.kind === 'tv' ? 'tv' : 'movie';
   const tr = btn.closest('tr');
-  const spinner = tr.querySelector('.reanalyze-status');
 
   // Guard
   if (!id || !tr) return;
 
-  // Show spinner
-  spinner.innerHTML = `<span class="reanalyze-spinner"></span>`;
+  const spinner = tr.querySelector('.reanalyze-status');
+
+  // Show spinner (null-safe: a missing span must never kill the click)
+  if (spinner) spinner.innerHTML = `<span class="reanalyze-spinner"></span>`;
   btn.disabled = true;
 
   try {
@@ -1150,7 +1161,7 @@ document.addEventListener('click', async e => {
   } catch (err) {
     alert('Re-analyze error: ' + err.message);
   } finally {
-    spinner.innerHTML = '';
+    if (spinner) spinner.innerHTML = '';
     btn.disabled = false;
   }
 });
