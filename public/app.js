@@ -848,7 +848,7 @@ function renderTable(rows, ctx) {
     tr.innerHTML = `
       <td><input type="checkbox"
       class="row-check row-check-${ctx.kind}"
-      data-id="${id}" onclick="event.stopPropagation()"></td>
+      data-id="${id}" data-kind="${ctx.kind}" onclick="event.stopPropagation()"></td>
       <td class="recent-col" title="${
         r.fi_mtime ? new Date(r.fi_mtime * 1000).toLocaleString() : 'No FI subtitle'
       }">
